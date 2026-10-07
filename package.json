@@ -1,0 +1,16 @@
+{
+  "name": "year95",
+  "private": true,
+  "version": "0.1.0",
+  "description": "YEAR95 — AI Financial Intelligence",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10"
+  },
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "lint": "node scripts/check-foundation.mjs lint",
+    "build": "node scripts/check-foundation.mjs build",
+    "test": "node --test"
+  }
+}
