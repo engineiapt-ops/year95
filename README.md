@@ -23,12 +23,18 @@ YEAR95 is a multi-user financial intelligence platform focused on deterministic 
 - packages/providers — external provider mappings
 - packages/config — application configuration
 
-## Architecture boundary
+## Foundation
 
-The domain package must remain independent of infrastructure. Database drivers and HTTP clients belong in adapters, not in the domain or deterministic decision core.
+The repository uses npm workspaces with Node 22. TypeScript is compiled per workspace and the domain remains independent of infrastructure.
+
+The current implementation contains only contracts and configuration foundations. Runtime services, database access and provider adapters are introduced in later milestones.
+
+## Configuration
+
+Runtime configuration is read at the application boundary. Secrets are never committed; use .env.example as the variable reference.
+
+The configuration package does not perform I/O and accepts an explicit environment map, which keeps configuration deterministic and testable.
 
 ## Current status
 
 This repository starts from a clean foundation. The legacy ai-financial-analyst repository is reference-only.
-
-The initial foundation gate validates repository structure and package boundaries without introducing runtime features.
