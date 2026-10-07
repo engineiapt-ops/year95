@@ -16,7 +16,7 @@ YEAR95 is a multi-user financial intelligence platform whose initial release pro
 - Minimum risk/reward is 1:2.
 - Supabase provides authentication and PostgreSQL persistence.
 - Backend is Fastify; frontend is React/Vite; background processing uses a dedicated worker.
-- The architecture must remain independent of Vercel runtime, OIDC, AI Gateway, and cron.
+- The architecture remains independent of Vercel runtime, OIDC, AI Gateway, and cron.
 - Repository access is owner-scoped from authenticated user identity; RLS is defense in depth.
 
 ## Initial scope
@@ -27,7 +27,7 @@ YEAR95 is a multi-user financial intelligence platform whose initial release pro
 5. Deterministic indicators and decision engine.
 6. Risk engine.
 7. Paper signals and outcome tracking.
-8. Gemini advisory context, after the deterministic core is stable.
+8. Gemini advisory context after the deterministic core is stable.
 
 ## Initial market-data provider
 Binance public market data.
