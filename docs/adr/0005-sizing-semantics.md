@@ -1,6 +1,6 @@
 # ADR 0005 — Sizing Semantics
 
-- Status: Proposed — maintainer approval required
+- Status: Approved — maintainer approval recorded 2026-10-08
 - Date: 2026-10-08
 
 ## Context
