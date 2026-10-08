@@ -1,7 +1,0 @@
-{
-  "name": "YEAR95 — AI Financial Intelligence",
-  "description": "Multi-user financial intelligence platform built around deterministic quantitative analysis and paper-trading signals.",
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
