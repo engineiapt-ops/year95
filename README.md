@@ -1,6 +1,6 @@
 # YEAR95 — AI Financial Intelligence
 
-YEAR95 is a multi-user financial intelligence platform focused on deterministic market analysis and paper-trading signals.
+YEAR95 is a multi-user financial intelligence platform built around deterministic quantitative analysis and paper-trading signals.
 
 ## Repository structure
 
@@ -23,18 +23,31 @@ YEAR95 is a multi-user financial intelligence platform focused on deterministic 
 - packages/providers — external provider mappings
 - packages/config — application configuration
 
+## Project contract
+
+The normative project contract is documented before runtime implementation:
+
+- [Project Contract](docs/PROJECT-CONTRACT.md)
+- [Migration Matrix](docs/MIGRATION-MATRIX.md)
+- [Behavior Contracts](docs/BEHAVIOR-CONTRACTS.md)
+- [Architecture Decision Records](docs/adr/)
+
+These documents define the non-negotiable guardrails for subsequent implementation PRs.
+
 ## Foundation
 
-The repository uses npm workspaces with Node 22. TypeScript is compiled per workspace and the domain remains independent of infrastructure.
+YEAR95 is a pnpm monorepo targeting Node 22 with TypeScript strict mode. Domain logic remains independent of HTTP, PostgreSQL and external provider details.
 
-The current implementation contains only contracts and configuration foundations. Runtime services, database access and provider adapters are introduced in later milestones.
+The foundation milestone formalizes contracts and governance only. Runtime services, database repositories and provider adapters are introduced in later milestones.
 
 ## Configuration
 
-Runtime configuration is read at the application boundary. Secrets are never committed; use .env.example as the variable reference.
+Runtime configuration is injected at application boundaries. Secrets are never committed. The configuration boundary must remain deterministic and testable.
 
-The configuration package does not perform I/O and accepts an explicit environment map, which keeps configuration deterministic and testable.
+## Legacy
+
+The legacy `ai-financial-analyst` repository is reference-only. Its behavior and schema are used to recover contracts and golden values; legacy code is not copied in bulk into YEAR95.
 
 ## Current status
 
-This repository starts from a clean foundation. The legacy ai-financial-analyst repository is reference-only.
+The repository is being rebuilt incrementally from the approved project contract. Each PR is limited to its declared scope.
