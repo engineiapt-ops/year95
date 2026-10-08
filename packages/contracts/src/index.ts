@@ -34,7 +34,7 @@ export const HTTP_STATUS_BY_ERROR: Readonly<Record<HttpErrorCode, number>> = {
 
 export class DomainError extends Error {
   readonly code: HttpErrorCode;
-  readonly details?: Readonly<Record<string, unknown>>;
+  readonly details: Readonly<Record<string, unknown>> | undefined;
 
   constructor(
     code: HttpErrorCode,

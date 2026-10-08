@@ -149,7 +149,11 @@ export function loadConfig(
 }
 
 export function publicEnv(env: ConfigEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter(([key, value]) => publicKeys.has(key) && value !== undefined),
-  );
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (publicKeys.has(key) && value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result;
 }
