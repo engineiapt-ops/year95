@@ -10,13 +10,48 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   NODE_VERSION: 22
   PNPM_VERSION: 9.15.9
 
 jobs:
+  bootstrap-lockfile:
+    name: bootstrap-lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: pr/003-ci-baseline
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Generate lockfile if absent
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "pnpm-lock.yaml already exists"
+            exit 0
+          fi
+          pnpm install --lockfile-only
+      - name: Commit lockfile if generated
+        run: |
+          if [ ! -f pnpm-lock.yaml ]; then
+            echo "pnpm-lock.yaml was not generated"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: add pnpm lockfile"
+          git push origin HEAD:pr/003-ci-baseline
+
   install:
     name: install
     runs-on: ubuntu-latest
