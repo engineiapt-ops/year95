@@ -1,6 +1,12 @@
 {
   "name": "@year95/quant",
-  "private": true,
   "version": "0.1.0",
-  "type": "module"
+  "private": true,
+  "type": "module",
+  "files": ["dist"],
+  "exports": { ".": "./dist/index.js" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json"
+  }
 }
