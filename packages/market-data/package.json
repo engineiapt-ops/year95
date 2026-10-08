@@ -1,12 +1,6 @@
 {
   "name": "@year95/market-data",
-  "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "files": ["dist"],
-  "exports": { ".": "./dist/index.js" },
-  "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json"
-  }
+  "version": "0.1.0",
+  "type": "module"
 }
