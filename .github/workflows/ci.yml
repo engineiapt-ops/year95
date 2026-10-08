@@ -17,6 +17,7 @@ env:
   PNPM_VERSION: 9.15.9
 
 jobs:
+  install:
     name: install
     runs-on: ubuntu-latest
     steps:
