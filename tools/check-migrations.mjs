@@ -1,0 +1,31 @@
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const rootDir = fileURLToPath(new URL('..', import.meta.url));
+const migrationDir = path.join(rootDir, 'db', 'migrations');
+function withoutCommentsAndStringLiterals(sql) {
+  return sql.replace(/--[^\n\r]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/'(?:''|[^'])*'/g, "''");
+}
+async function main() {
+  const files = (await readdir(migrationDir)).filter((name) => name.endsWith('.sql')).sort();
+  let previous = 23;
+  for (const file of files) {
+    const match = file.match(/^(\d{3,})_[A-Za-z0-9_-]+\.sql$/);
+    if (!match) throw new Error('Invalid migration filename: ' + file);
+    const number = Number(match[1]);
+    if (number < 24) throw new Error('db/migrations is reserved for migrations 024+: ' + file);
+    if (number !== previous + 1) throw new Error('Forward-only migration sequence has a gap before ' + file);
+    previous = number;
+    const sql = withoutCommentsAndStringLiterals(await readFile(path.join(migrationDir, file), 'utf8'));
+    const destructive = /\b(?:DROP\s+(?:TABLE|COLUMN|CONSTRAINT|TRIGGER|INDEX|FUNCTION|TYPE|SCHEMA|SEQUENCE|POLICY)|TRUNCATE\b|RENAME\s+TO\b|ALTER\s+TABLE[\s\S]{0,240}\bRENAME\b)/i;
+    if (destructive.test(sql)) {
+      throw new Error('Destructive DDL is prohibited in ' + file + '. db/baseline is intentionally not scanned.');
+    }
+  }
+  console.log('check:migrations PASS (' + files.length + ' migration(s)); db/baseline excluded.');
+}
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});

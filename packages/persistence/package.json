@@ -7,6 +7,7 @@
   "exports": { ".": "./dist/index.js" },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "migrate": "pnpm build && node ../../tools/db-migrate.mjs"
   }
 }
