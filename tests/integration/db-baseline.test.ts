@@ -82,11 +82,16 @@ integrationTest('equivalent existing database is marked without replaying baseli
 });
 
 integrationTest('refuses to mark an existing database when schema comparison fails', async () => {
-  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+  await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await target.transaction([{ sql: schemaSql }]);
+    await reference.transaction([{ sql: schemaSql }]);
+    await target.transaction([{ sql: 'ALTER TABLE market_data ADD COLUMN baseline_probe TEXT' }]);
     await expect(runMigrations(target, {
       plan,
-      compareExistingSchema: async () => ({ equivalent: false, differences: ['columns'] }),
+      compareExistingSchema: async () => {
+        const result = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+        return { equivalent: result.equivalent, differences: result.differences };
+      },
     })).rejects.toThrow(/does not match db\/baseline\/schema\.sql/i);
     const tracker = await target.queryRows<{ exists: boolean }>(
       "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'schema_migrations') AS exists",
@@ -97,7 +102,7 @@ integrationTest('refuses to mark an existing database when schema comparison fai
 });
 
 integrationTest('rejects checksum mismatch before executing new SQL', async () => {
-  await withSchemas(async (_admin, target, _reference) => {
+  await withSchemas(async (_admin, target) => {
     await runMigrations(target, { plan });
     await target.transaction([{
       sql: "UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE name = '001_backtest_runs.sql'",

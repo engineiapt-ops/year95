@@ -43,7 +43,7 @@ export class PsqlDatabaseClient {
     const script = [
       this.readOnly ? 'BEGIN READ ONLY;' : 'BEGIN;',
       'SET LOCAL search_path TO ' + this.quotedSchema + ', public;',
-      'SELECT COALESCE(json_agg(row_to_json(_year95_rows)), \\'[]\\'::json)::text FROM (' + query + ') AS _year95_rows;',
+      "SELECT COALESCE(json_agg(row_to_json(_year95_rows)), '[]'::json)::text FROM (" + query + ') AS _year95_rows;',
       'COMMIT;',
     ].join('\n');
     const output = this.run(script);
