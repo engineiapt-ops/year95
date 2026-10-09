@@ -68,6 +68,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Lint
         run: pnpm lint
+      - name: Check forward-only migrations
+        run: pnpm check:migrations
 
   architecture:
     name: architecture
@@ -154,8 +156,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
       - name: Integration
         run: pnpm test:integration
+      - name: Verify disposable database baseline
+        env:
+          DB_BASELINE_DISPOSABLE: '1'
+        run: pnpm db:baseline
 
   build:
     name: build
