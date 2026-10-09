@@ -32,7 +32,7 @@ async function main() {
       migrationName: '024_add_instruments.sql',
       expectedAppliedNames,
       compareSchema: async () => {
-        const instrumentTable = await targetReadOnly.queryRows<{ exists: boolean }>(
+        const instrumentTable = await targetReadOnly.queryRows(
           "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments' AND table_type = 'BASE TABLE') AS exists",
           ['public'],
         );
