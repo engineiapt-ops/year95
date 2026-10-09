@@ -40,7 +40,7 @@ async function withSchemas(
 
 const legacyHistoryThrough018 = plan.baselineRecords
   .map(({ name }) => name)
-  .filter((name) => /^\\d{3}_/.test(name) && Number(name.slice(0, 3)) <= 18);
+  .filter((name) => /^[0-9]{3}_/.test(name) && Number(name.slice(0, 3)) <= 18);
 
 async function createLegacyFixture(
   target: PsqlDatabaseClient,
