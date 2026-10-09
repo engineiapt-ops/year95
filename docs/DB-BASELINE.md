@@ -45,6 +45,10 @@ The optional Supabase comparison is separate and read-only. `tools/db-baseline.m
 
 The canonical schema now includes the final effects of historical migrations 008–009 (walk-forward portfolio tables and indexes) and 022–023 (the instruments table, final Saxo venue constraint, and initial reference rows). It also preserves the server-side-only privilege effects of migrations 019–020. The integration tests check these objects and reference rows so the canonical schema cannot silently drift behind the preserved migration history.
 
+## Recognized legacy upgrade path
+
+Migration `024_add_instruments.sql` adds the final `instruments` table and four reference instruments. It is idempotent on a fresh database whose canonical baseline already includes that table. The migration runner may use it to upgrade one narrowly defined legacy state: a `schema_migrations(filename, applied_at)` ledger containing exactly historical migrations 001–018 and a read-only schema fingerprint equal to the canonical schema when only the `instruments` table and its dependent constraints/indexes are excluded. The runner applies 024 and inserts its filename in one transaction, then requires a full schema fingerprint match before upgrading the legacy ledger or recording missing baseline metadata. Other ledger contents or schema differences fail closed. The live Supabase database remains read-only until a separately authorized deployment step.
+
 ## Commands
 
 - `pnpm check:migrations` validates only `db/migrations/` and rejects filenames below 024, sequence gaps and destructive DDL. `db/baseline/` is intentionally excluded.

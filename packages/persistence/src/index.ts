@@ -5,10 +5,11 @@ export type {
   MigrationDatabase,
   MigrationPlan,
   MigrationRecord,
+  LegacySchemaBridge,
   RunMigrationsOptions,
   SchemaComparison,
   SqlStatement,
   SqlValue,
 } from './migrate.js';
-export { compareSchemaFingerprints, schemaFingerprint } from './schema-fingerprint.js';
+export { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables, schemaFingerprint } from './schema-fingerprint.js';
 export type { SchemaFingerprint, SchemaFingerprintComparison } from './schema-fingerprint.js';

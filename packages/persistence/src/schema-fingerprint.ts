@@ -80,6 +80,30 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
   );
   return normalizeSchemaName({ tables, columns, constraints, indexes, triggers }, schemaName) as SchemaFingerprint;
 }
+function filterExcludedTables(
+  fingerprint: SchemaFingerprint,
+  excludedTableNames: ReadonlySet<string>,
+): SchemaFingerprint {
+  const retain = (rows: readonly Record<string, unknown>[]) => rows.filter((row) =>
+    typeof row.table_name !== 'string' || !excludedTableNames.has(row.table_name),
+  );
+  return {
+    tables: retain(fingerprint.tables),
+    columns: retain(fingerprint.columns),
+    constraints: retain(fingerprint.constraints),
+    indexes: retain(fingerprint.indexes),
+    triggers: retain(fingerprint.triggers),
+  };
+}
+function compareFingerprints(
+  expected: SchemaFingerprint,
+  actual: SchemaFingerprint,
+): SchemaFingerprintComparison {
+  const differences = (Object.keys(expected) as (keyof SchemaFingerprint)[]).filter(
+    (category) => JSON.stringify(expected[category]) !== JSON.stringify(actual[category]),
+  );
+  return { equivalent: differences.length === 0, differences, expected, actual };
+}
 export async function compareSchemaFingerprints(
   expectedDb: MigrationDatabase,
   actualDb: MigrationDatabase,
@@ -90,8 +114,31 @@ export async function compareSchemaFingerprints(
     schemaFingerprint(expectedDb, expectedSchema),
     schemaFingerprint(actualDb, actualSchema),
   ]);
-  const differences = (Object.keys(expected) as (keyof SchemaFingerprint)[]).filter(
-    (category) => JSON.stringify(expected[category]) !== JSON.stringify(actual[category]),
+  return compareFingerprints(expected, actual);
+}
+
+/**
+ * Compares a known legacy state with the canonical schema while ignoring only
+ * explicitly named tables. This is intended for narrow, preflighted compatibility
+ * bridges—not as a replacement for the exact final-schema comparison.
+ */
+export async function compareSchemaFingerprintsIgnoringTables(
+  expectedDb: MigrationDatabase,
+  actualDb: MigrationDatabase,
+  expectedSchema: string,
+  actualSchema: string,
+  excludedTableNames: readonly string[],
+): Promise<SchemaFingerprintComparison> {
+  if (excludedTableNames.length === 0) {
+    return compareSchemaFingerprints(expectedDb, actualDb, expectedSchema, actualSchema);
+  }
+  const [expected, actual] = await Promise.all([
+    schemaFingerprint(expectedDb, expectedSchema),
+    schemaFingerprint(actualDb, actualSchema),
+  ]);
+  const excluded = new Set(excludedTableNames);
+  return compareFingerprints(
+    filterExcludedTables(expected, excluded),
+    filterExcludedTables(actual, excluded),
   );
-  return { equivalent: differences.length === 0, differences, expected, actual };
 }
