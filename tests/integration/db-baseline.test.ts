@@ -93,7 +93,32 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
         const comparison = await compareSchemaFingerprintsIgnoringTables(
           reference, target, referenceSchema, targetSchema, ['instruments'],
         );
-        return { equivalent: comparison.equivalent, differences: comparison.differences };
+        const detail = {
+          tables: {
+            expected: comparison.expected.tables.map((row) => row.table_name),
+            actual: comparison.actual.tables.map((row) => row.table_name),
+          },
+          columns: {
+            expected: comparison.expected.columns.map((row) => String(row.table_name) + '.' + String(row.column_name)),
+            actual: comparison.actual.columns.map((row) => String(row.table_name) + '.' + String(row.column_name)),
+          },
+          constraints: {
+            expected: comparison.expected.constraints.map((row) => String(row.table_name) + '.' + String(row.constraint_name)),
+            actual: comparison.actual.constraints.map((row) => String(row.table_name) + '.' + String(row.constraint_name)),
+          },
+          indexes: {
+            expected: comparison.expected.indexes.map((row) => String(row.table_name) + '.' + String(row.index_name)),
+            actual: comparison.actual.indexes.map((row) => String(row.table_name) + '.' + String(row.index_name)),
+          },
+          triggers: {
+            expected: comparison.expected.triggers.map((row) => String(row.table_name) + '.' + String(row.trigger_name)),
+            actual: comparison.actual.triggers.map((row) => String(row.table_name) + '.' + String(row.trigger_name)),
+          },
+        };
+        return {
+          equivalent: comparison.equivalent,
+          differences: comparison.equivalent ? [] : ['Fingerprint diagnostics: ' + JSON.stringify(detail)],
+        };
       },
     };
 
