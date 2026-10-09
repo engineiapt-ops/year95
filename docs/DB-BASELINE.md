@@ -12,7 +12,7 @@ A blank database is bootstrapped from `db/baseline/schema.sql`. The 23 historica
 
 | File | SHA-256 |
 |---|---|
-| schema.sql | 9f510a285b26ec9a102f1473a14ff18cc7f4ee21257b9990027a82a492a0f429 |
+| schema.sql | 30748ff7cb2741184344ab70d51edc5cb6f9cea312abe47541c3fe67eee67001 |
 | 001_backtest_runs.sql | a3e66fd79a0f9d79958f81cec1efcc4ae43dcd3efb7fe1815442b05f6bf33b96 |
 | 002_backtest_dataset_hash.sql | 7bdfe6346f01f5db2091519566ef1aed3f746e57e840974e9584ee40609db594 |
 | 003_execution_model.sql | e7869eaecb40e80ae90e7acb54afad9a6f0935e1b920877dc8399b92208ec7ad |
