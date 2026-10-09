@@ -12,7 +12,7 @@ A blank database is bootstrapped from `db/baseline/schema.sql`. The 23 historica
 
 | File | SHA-256 |
 |---|---|
-| schema.sql | 9eae56af5ed319a0b5f0b2f422ed2eabbba1eb86a3a9d3a8415b6f7ca3968a6a |
+| schema.sql | 9f510a285b26ec9a102f1473a14ff18cc7f4ee21257b9990027a82a492a0f429 |
 | 001_backtest_runs.sql | a3e66fd79a0f9d79958f81cec1efcc4ae43dcd3efb7fe1815442b05f6bf33b96 |
 | 002_backtest_dataset_hash.sql | 7bdfe6346f01f5db2091519566ef1aed3f746e57e840974e9584ee40609db594 |
 | 003_execution_model.sql | e7869eaecb40e80ae90e7acb54afad9a6f0935e1b920877dc8399b92208ec7ad |
@@ -42,6 +42,8 @@ A blank database is bootstrapped from `db/baseline/schema.sql`. The 23 historica
 The structural fingerprint covers tables/views, ordered column definitions (types, defaults and nullability), constraints and definitions, index definitions, and non-internal triggers plus trigger-function definitions. The comparison is read-only and normalizes schema names before equality checks.
 
 The optional Supabase comparison is separate and read-only. `tools/db-baseline.mjs` refuses to run unless `DB_BASELINE_DISPOSABLE=1` is set, to guard its temporary-schema DDL. If `SUPABASE_READONLY_DATABASE_URL` is supplied, the comparator uses the connection only for read-only catalog SELECTs. No live database has been accessed by this PR.
+
+The canonical schema now includes the final effects of historical migrations 008–009 (walk-forward portfolio tables and indexes) and 022–023 (the instruments table, final Saxo venue constraint, and initial reference rows). It also preserves the server-side-only privilege effects of migrations 019–020. The integration tests check these objects and reference rows so the canonical schema cannot silently drift behind the preserved migration history.
 
 ## Commands
 
