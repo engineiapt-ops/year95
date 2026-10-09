@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { runMigrations, type MigrationDatabase, type SqlStatement } from '../../packages/persistence/src/migrate.js';
-import { compareSchemaFingerprints } from '../../packages/persistence/src/schema-fingerprint.js';
+import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables } from '../../packages/persistence/src/schema-fingerprint.js';
 import { loadMigrationPlan } from '../../tools/migration-files.mjs';
 import { PsqlDatabaseClient } from '../../tools/postgres-client.mjs';
 
@@ -37,6 +37,127 @@ async function withSchemas(
     await dropSchema(admin, referenceSchema);
   }
 }
+
+const legacyHistoryThrough018 = plan.baselineRecords
+  .map(({ name }) => name)
+  .filter((name) => /^\\d{3}_/.test(name) && Number(name.slice(0, 3)) <= 18);
+
+async function createLegacyFixture(
+  target: PsqlDatabaseClient,
+  targetSchema: string,
+  withUnrecognizedDrift = false,
+): Promise<void> {
+  const historyValues = legacyHistoryThrough018
+    .map((name) => "('" + name.replaceAll("'", "''") + "')")
+    .join(', ');
+  const statements: SqlStatement[] = [
+    { sql: schemaSql },
+    { sql: 'DROP TABLE instruments' },
+  ];
+  if (withUnrecognizedDrift) {
+    statements.push({ sql: 'ALTER TABLE market_data ADD COLUMN legacy_drift TEXT' });
+  }
+  statements.push(
+    { sql: 'CREATE TABLE schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())' },
+    { sql: 'INSERT INTO schema_migrations (filename) VALUES ' + historyValues },
+    {
+      sql: "INSERT INTO market_data (ativo, timeframe, open_time, open, high, low, close, volume) VALUES ('BTCUSDT', '1h', TIMESTAMPTZ '2026-01-01 00:00:00+00', 1, 1, 1, 1, 1)",
+    },
+  );
+  await target.transaction(statements);
+  const tracker = await target.queryRows<{ schema_name: string }>(
+    "SELECT table_schema AS schema_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'schema_migrations'",
+    [targetSchema],
+  );
+  expect(tracker).toHaveLength(1);
+}
+
+integrationTest('recognized legacy schema is bridged additively and preserves existing data', async () => {
+  await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
+    await createLegacyFixture(target, targetSchema);
+    const compareExistingSchema = async () => {
+      const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+      return { equivalent: comparison.equivalent, differences: comparison.differences };
+    };
+    const bridge = {
+      migrationName: '024_add_instruments.sql',
+      expectedAppliedNames: legacyHistoryThrough018,
+      compareSchema: async () => {
+        const comparison = await compareSchemaFingerprintsIgnoringTables(
+          reference, target, referenceSchema, targetSchema, ['instruments'],
+        );
+        return { equivalent: comparison.equivalent, differences: comparison.differences };
+      },
+    };
+
+    await runMigrations(target, { plan, compareExistingSchema, legacySchemaBridge: bridge });
+
+    const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+    expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
+    const preservedData = await target.queryRows<{ count: number | string }>(
+      'SELECT COUNT(*)::int AS count FROM market_data',
+    );
+    expect(Number(preservedData[0]?.count)).toBe(1);
+
+    const applied = await target.queryRows<{ name: string; origin: string }>(
+      'SELECT name, origin FROM schema_migrations ORDER BY name',
+    );
+    expect(applied.filter((row) => row.origin === 'baseline')).toHaveLength(24);
+    expect(applied.filter((row) => row.origin === 'migration')).toEqual([
+      { name: '024_add_instruments.sql', origin: 'migration' },
+    ]);
+    expect(applied.map((row) => row.name)).toContain('schema.sql');
+
+    const instruments = await target.queryRows<{ symbol: string; venue: string; enabled: boolean }>(
+      'SELECT symbol, venue, enabled FROM instruments ORDER BY symbol',
+    );
+    expect(instruments).toEqual([
+      { symbol: 'BTCUSD', venue: 'ig', enabled: false },
+      { symbol: 'BTCUSDT', venue: 'binance_spot', enabled: true },
+      { symbol: 'EURUSD', venue: 'saxo', enabled: false },
+      { symbol: 'US500', venue: 'ig', enabled: false },
+    ]);
+  });
+});
+
+integrationTest('legacy bridge refuses unrelated schema drift before any bridge write', async () => {
+  await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
+    await createLegacyFixture(target, targetSchema, true);
+    const bridge = {
+      migrationName: '024_add_instruments.sql',
+      expectedAppliedNames: legacyHistoryThrough018,
+      compareSchema: async () => {
+        const comparison = await compareSchemaFingerprintsIgnoringTables(
+          reference, target, referenceSchema, targetSchema, ['instruments'],
+        );
+        return { equivalent: comparison.equivalent, differences: comparison.differences };
+      },
+    };
+    await expect(runMigrations(target, {
+      plan,
+      compareExistingSchema: async () => {
+        const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+        return { equivalent: comparison.equivalent, differences: comparison.differences };
+      },
+      legacySchemaBridge: bridge,
+    })).rejects.toThrow(/does not match the supported legacy schema/i);
+
+    const instruments = await target.queryRows<{ exists: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments') AS exists",
+      [targetSchema],
+    );
+    expect(instruments[0]?.exists).toBe(false);
+    const bridgeRecord = await target.queryRows<{ count: number | string }>(
+      "SELECT COUNT(*)::int AS count FROM schema_migrations WHERE filename = '024_add_instruments.sql'",
+    );
+    expect(Number(bridgeRecord[0]?.count)).toBe(0);
+    const legacyColumns = await target.queryRows<{ column_name: string }>(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'schema_migrations' ORDER BY column_name",
+      [targetSchema],
+    );
+    expect(legacyColumns.map((row) => row.column_name)).toEqual(['applied_at', 'filename']);
+  });
+});
 
 integrationTest('canonical baseline includes the final effects of historical migrations 008-009 and 022-023', async () => {
   await withSchemas(async (_admin, target, _reference, targetSchema) => {
