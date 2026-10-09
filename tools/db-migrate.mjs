@@ -32,6 +32,13 @@ async function main() {
       migrationName: '024_add_instruments.sql',
       expectedAppliedNames,
       compareSchema: async () => {
+        const instrumentTable = await targetReadOnly.queryRows<{ exists: boolean }>(
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments' AND table_type = 'BASE TABLE') AS exists",
+          ['public'],
+        );
+        if (instrumentTable[0]?.exists === true) {
+          return { equivalent: false, differences: ['instruments must be absent for the supported 024 bridge'] };
+        }
         const comparison = await compareSchemaFingerprintsIgnoringTables(
           referenceDb, targetReadOnly, 'public', 'public', ['instruments'],
         );
