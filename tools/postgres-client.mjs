@@ -43,7 +43,7 @@ export class PsqlDatabaseClient {
     const script = [
       this.readOnly ? 'BEGIN READ ONLY;' : 'BEGIN;',
       'SET LOCAL search_path TO ' + this.quotedSchema + ', public;',
-      'SELECT COALESCE(json_agg(row_to_json(_year95_rows)), \'[]\'::json)::text FROM (' + query + ') AS _year95_rows;',
+      'SELECT COALESCE(json_agg(row_to_json(_year95_rows)), \\'[]\\'::json)::text FROM (' + query + ') AS _year95_rows;',
       'COMMIT;',
     ].join('\n');
     const output = this.run(script);
@@ -55,6 +55,6 @@ export class PsqlDatabaseClient {
   async transaction(statements) {
     if (this.readOnly) throw new Error('Read-only database client refuses all transactions');
     const sql = statements.map((statement) => applyParameters(statement.sql, statement.values)).join(';\n');
-    this.run(['BEGIN;', 'SET LOCAL search_path TO ' + this.quotedSchema + ', public;', sql, 'COMMIT;'].join('\n'));
+    this.run(['BEGIN;', 'SET LOCAL search_path TO ' + this.quotedSchema + ', public;', sql + ';', 'COMMIT;'].join('\n'));
   }
 }

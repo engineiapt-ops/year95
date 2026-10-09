@@ -1,7 +1,3 @@
-import { createHash } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
-import path from 'node:path';
-
 export type SqlValue = string | number | boolean | null;
 export interface SqlStatement { sql: string; values?: readonly SqlValue[] }
 export interface MigrationDatabase {
@@ -19,63 +15,11 @@ export interface MigrationPlan {
 }
 export interface SchemaComparison { equivalent: boolean; differences?: readonly string[] }
 export interface RunMigrationsOptions {
-  rootDir: string;
+  plan: MigrationPlan;
   compareExistingSchema?: () => Promise<SchemaComparison>;
 }
-const BASELINE_MIGRATION_COUNT = 23;
 
-function checksum(content: Uint8Array): string {
-  return createHash('sha256').update(content).digest('hex');
-}
-async function readSqlFile(absolutePath: string, name: string, origin: MigrationRecord['origin']) {
-  const bytes = await readFile(absolutePath);
-  return {
-    record: { name, checksum: checksum(bytes), origin },
-    sql: bytes.toString('utf8'),
-  };
-}
-export async function loadMigrationPlan(rootDir: string): Promise<MigrationPlan> {
-  const baselineDir = path.join(rootDir, 'db', 'baseline');
-  const migrationDir = path.join(rootDir, 'db', 'migrations');
-  const baselineNames = (await readdir(baselineDir))
-    .filter((name) => /^\d{3}_[A-Za-z0-9_-]+\.sql$/.test(name)).sort();
-  if (baselineNames.length !== BASELINE_MIGRATION_COUNT) {
-    throw new Error('Expected 23 immutable baseline migrations; found ' + baselineNames.length);
-  }
-  baselineNames.forEach((name, index) => {
-    const prefix = String(index + 1).padStart(3, '0') + '_';
-    if (!name.startsWith(prefix)) throw new Error('Baseline sequence is incomplete at ' + prefix);
-  });
-  const schemaEntry = await readSqlFile(path.join(baselineDir, 'schema.sql'), 'schema.sql', 'baseline');
-  const baselineFiles = await Promise.all(
-    baselineNames.map((name) => readSqlFile(path.join(baselineDir, name), name, 'baseline')),
-  );
-  const migrationNames = (await readdir(migrationDir)).filter((name) => name.endsWith('.sql')).sort();
-  let previousNumber = 23;
-  for (const name of migrationNames) {
-    const match = name.match(/^(\d{3,})_[A-Za-z0-9_-]+\.sql$/);
-    if (!match || Number(match[1]) < 24) {
-      throw new Error('New migrations must use the 024+ naming scheme: ' + name);
-    }
-    const number = Number(match[1]);
-    if (number !== previousNumber + 1) throw new Error('Migration sequence has a gap before ' + name);
-    previousNumber = number;
-  }
-  const migrations = await Promise.all(migrationNames.map(async (name) => {
-    const migration = await readSqlFile(path.join(migrationDir, name), name, 'migration');
-    return { record: migration.record, sql: migration.sql };
-  }));
-  const baselineRecords = [schemaEntry.record, ...baselineFiles.map((file) => file.record)];
-  migrations.sort((left, right) => left.record.name.localeCompare(right.record.name));
-  return {
-    baselineSchemaSql: schemaEntry.sql,
-    baselineRecords,
-    migrations,
-    allRecords: [...baselineRecords, ...migrations.map(({ record }) => record)],
-  };
-}
-
-/** Check known applied metadata before performing any database writes. */
+/** Reject unknown, tampered or reclassified ledger entries before any database write. */
 export function assertRecordedChecksums(
   applied: readonly MigrationRecord[],
   expected: readonly MigrationRecord[],
@@ -131,7 +75,7 @@ async function hasTracker(db: MigrationDatabase): Promise<boolean> {
   const rows = await db.queryRows<{ exists: boolean }>(
     "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'schema_migrations') AS exists",
   );
-  return rows[0]?.exists === true || rows[0]?.exists === 'true';
+  return rows[0]?.exists === true;
 }
 async function userObjectCount(db: MigrationDatabase): Promise<number> {
   const rows = await db.queryRows<{ object_count: number | string }>([
@@ -214,10 +158,10 @@ async function upgradeLegacyTracker(
  * Empty databases are bootstrapped from the canonical final schema.sql.
  * Historical 001–023 files are checksum-recorded as baseline history, never
  * executed against that final schema. Existing databases are only marked after
- * an external comparator proves structural equivalence.
+ * a comparator proves structural equivalence.
  */
 export async function runMigrations(db: MigrationDatabase, options: RunMigrationsOptions): Promise<void> {
-  const plan = await loadMigrationPlan(options.rootDir);
+  const plan = options.plan;
   let trackerExists = await hasTracker(db);
   let columns = trackerExists ? await trackerColumns(db) : new Set<string>();
   let legacyFilenameColumn = columns.has('filename');

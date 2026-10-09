@@ -1,3 +1,4 @@
+/* global URL, console, process */
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,7 @@ async function main() {
     if (number !== previous + 1) throw new Error('Forward-only migration sequence has a gap before ' + file);
     previous = number;
     const sql = withoutCommentsAndStringLiterals(await readFile(path.join(migrationDir, file), 'utf8'));
-    const destructive = /\b(?:DROP\s+(?:TABLE|COLUMN|CONSTRAINT|TRIGGER|INDEX|FUNCTION|TYPE|SCHEMA|SEQUENCE|POLICY)|TRUNCATE\b|RENAME\s+TO\b|ALTER\s+TABLE[\s\S]{0,240}\bRENAME\b)/i;
+    const destructive = /\b(?:DROP|TRUNCATE|RENAME)\b/i;
     if (destructive.test(sql)) {
       throw new Error('Destructive DDL is prohibited in ' + file + '. db/baseline is intentionally not scanned.');
     }

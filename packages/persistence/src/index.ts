@@ -1,6 +1,6 @@
 export const VERSION = '0.1.0';
 
-export { assertRecordedChecksums, loadMigrationPlan, runMigrations } from './migrate.js';
+export { assertRecordedChecksums, runMigrations } from './migrate.js';
 export type {
   MigrationDatabase,
   MigrationPlan,

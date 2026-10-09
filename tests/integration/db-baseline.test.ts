@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { runMigrations, type MigrationDatabase, type SqlStatement } from '../../packages/persistence/src/migrate.js';
 import { compareSchemaFingerprints } from '../../packages/persistence/src/schema-fingerprint.js';
+import { loadMigrationPlan } from '../../tools/migration-files.mjs';
 import { PsqlDatabaseClient } from '../../tools/postgres-client.mjs';
 
 const connectionString = process.env.DATABASE_URL?.trim();
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const schemaSql = await readFile(path.join(rootDir, 'db/baseline/schema.sql'), 'utf8');
+const plan = await loadMigrationPlan(rootDir);
 const integrationTest = test.skipIf(!connectionString);
 
 async function createSchema(admin: PsqlDatabaseClient, schemaName: string): Promise<void> {
@@ -39,13 +41,7 @@ async function withSchemas(
 integrationTest('empty database baseline equals canonical schema.sql structure', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction([{ sql: schemaSql }]);
-    await runMigrations(target, {
-      rootDir,
-      compareExistingSchema: async () => {
-        const result = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
-        return { equivalent: result.equivalent, differences: result.differences };
-      },
-    });
+    await runMigrations(target, { plan });
     const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
     expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
     const rows = await target.queryRows<{ name: string; origin: string }>(
@@ -71,7 +67,7 @@ integrationTest('equivalent existing database is marked without replaying baseli
       },
     };
     await runMigrations(observed, {
-      rootDir,
+      plan,
       compareExistingSchema: async () => {
         const result = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
         return { equivalent: result.equivalent, differences: result.differences };
@@ -85,21 +81,29 @@ integrationTest('equivalent existing database is marked without replaying baseli
   });
 });
 
+integrationTest('refuses to mark an existing database when schema comparison fails', async () => {
+  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+    await target.transaction([{ sql: schemaSql }]);
+    await expect(runMigrations(target, {
+      plan,
+      compareExistingSchema: async () => ({ equivalent: false, differences: ['columns'] }),
+    })).rejects.toThrow(/does not match db\/baseline\/schema\.sql/i);
+    const tracker = await target.queryRows<{ exists: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'schema_migrations') AS exists",
+      [targetSchema],
+    );
+    expect(tracker[0]?.exists).toBe(false);
+  });
+});
+
 integrationTest('rejects checksum mismatch before executing new SQL', async () => {
-  await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-    await reference.transaction([{ sql: schemaSql }]);
-    await runMigrations(target, {
-      rootDir,
-      compareExistingSchema: async () => {
-        const result = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
-        return { equivalent: result.equivalent, differences: result.differences };
-      },
-    });
+  await withSchemas(async (_admin, target, _reference) => {
+    await runMigrations(target, { plan });
     await target.transaction([{
       sql: "UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE name = '001_backtest_runs.sql'",
     }]);
     await expect(runMigrations(target, {
-      rootDir,
+      plan,
       compareExistingSchema: async () => ({ equivalent: true }),
     })).rejects.toThrow(/checksum changed/i);
     const unchanged = await target.queryRows<{ count: number | string }>(

@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
-import { assertRecordedChecksums, loadMigrationPlan } from '../../packages/persistence/src/migrate.js';
+import { assertRecordedChecksums } from '../../packages/persistence/src/migrate.js';
+import { loadMigrationPlan } from '../../tools/migration-files.mjs';
 
 const expected = [
   { name: 'schema.sql', checksum: 'a'.repeat(64), origin: 'baseline' as const },
@@ -35,7 +36,7 @@ describe('forward-only migration metadata', () => {
     const historical = plan.baselineRecords.slice(1);
     expect(historical).toHaveLength(23);
     historical.forEach((record, index) => {
-      expect(record.name.startsWith(String(index + 1).toString().padStart(3, '0') + '_')).toBe(true);
+      expect(record.name.startsWith(String(index + 1).padStart(3, '0') + '_')).toBe(true);
       expect(record.origin).toBe('baseline');
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
@@ -44,9 +45,7 @@ describe('forward-only migration metadata', () => {
     const plan = await loadMigrationPlan(rootDir);
     const report = await readFile(path.join(rootDir, 'docs', 'DB-BASELINE.md'), 'utf8');
     for (const record of plan.baselineRecords) {
-      const filePath = record.name === 'schema.sql'
-        ? path.join(rootDir, 'db', 'baseline', record.name)
-        : path.join(rootDir, 'db', 'baseline', record.name);
+      const filePath = path.join(rootDir, 'db', 'baseline', record.name);
       const actual = createHash('sha256').update(await readFile(filePath)).digest('hex');
       expect(record.checksum).toBe(actual);
       const row = report.split('\n').find((line) => line.startsWith('| ' + record.name + ' |'));
