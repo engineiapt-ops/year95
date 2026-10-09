@@ -83,6 +83,13 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
       migrationName: '024_add_instruments.sql',
       expectedAppliedNames: legacyHistoryThrough018,
       compareSchema: async () => {
+        const instrumentTable = await target.queryRows<{ exists: boolean }>(
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments' AND table_type = 'BASE TABLE') AS exists",
+          [targetSchema],
+        );
+        if (instrumentTable[0]?.exists === true) {
+          return { equivalent: false, differences: ['instruments must be absent for the supported 024 bridge'] };
+        }
         const comparison = await compareSchemaFingerprintsIgnoringTables(
           reference, target, referenceSchema, targetSchema, ['instruments'],
         );
@@ -127,6 +134,13 @@ integrationTest('legacy bridge refuses unrelated schema drift before any bridge 
       migrationName: '024_add_instruments.sql',
       expectedAppliedNames: legacyHistoryThrough018,
       compareSchema: async () => {
+        const instrumentTable = await target.queryRows<{ exists: boolean }>(
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments' AND table_type = 'BASE TABLE') AS exists",
+          [targetSchema],
+        );
+        if (instrumentTable[0]?.exists === true) {
+          return { equivalent: false, differences: ['instruments must be absent for the supported 024 bridge'] };
+        }
         const comparison = await compareSchemaFingerprintsIgnoringTables(
           reference, target, referenceSchema, targetSchema, ['instruments'],
         );
