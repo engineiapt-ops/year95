@@ -5,6 +5,7 @@ export type {
   MigrationDatabase,
   MigrationPlan,
   MigrationRecord,
+  LegacySchemaBridge,
   RunMigrationsOptions,
   SchemaComparison,
   SqlStatement,
