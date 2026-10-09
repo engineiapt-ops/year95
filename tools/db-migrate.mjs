@@ -2,7 +2,10 @@
 import { fileURLToPath } from 'node:url';
 import { PsqlDatabaseClient } from './postgres-client.mjs';
 import { loadMigrationPlan } from './migration-files.mjs';
-import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables } from '../packages/persistence/dist/schema-fingerprint.js';
+import {
+  compareSchemaFingerprints,
+  compareSchemaFingerprintsIgnoringTablesAndIndexes,
+} from '../packages/persistence/dist/schema-fingerprint.js';
 import { runMigrations } from '../packages/persistence/dist/migrate.js';
 
 async function main() {
@@ -22,14 +25,17 @@ async function main() {
       return { equivalent: comparison.equivalent, differences: comparison.differences };
     };
 
-    // Permit exactly the known pre-024 production state: historical filename
-    // ledger through 018, with all canonical objects except instruments. The
-    // bridge comparator ignores only that table and its indexes/constraints.
+    // Permit exactly the observed pre-recovery state: historical filename ledger
+    // through 018, with only instruments and the historical paper-idempotency
+    // index missing. Any other structural drift must fail closed.
     const expectedAppliedNames = plan.baselineRecords
       .map(({ name }) => name)
       .filter((name) => /^[0-9]{3}_/.test(name) && Number(name.slice(0, 3)) <= 18);
     legacySchemaBridge = {
-      migrationName: '024_add_instruments.sql',
+      migrationNames: [
+        '024_add_instruments.sql',
+        '025_add_decision_log_paper_idempotency.sql',
+      ],
       expectedAppliedNames,
       compareSchema: async () => {
         const instrumentTable = await targetReadOnly.queryRows(
@@ -37,10 +43,25 @@ async function main() {
           ['public'],
         );
         if (instrumentTable[0]?.exists === true) {
-          return { equivalent: false, differences: ['instruments must be absent for the supported 024 bridge'] };
+          return { equivalent: false, differences: ['instruments must be absent for the supported recovery path'] };
         }
-        const comparison = await compareSchemaFingerprintsIgnoringTables(
-          referenceDb, targetReadOnly, 'public', 'public', ['instruments'],
+        const idempotencyIndex = await targetReadOnly.queryRows(
+          'SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS exists',
+          ['public', 'idx_decision_log_paper_idempotency'],
+        );
+        if (idempotencyIndex[0]?.exists === true) {
+          return {
+            equivalent: false,
+            differences: ['idx_decision_log_paper_idempotency must be absent for the supported recovery path'],
+          };
+        }
+        const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+          referenceDb,
+          targetReadOnly,
+          'public',
+          'public',
+          ['instruments'],
+          ['idx_decision_log_paper_idempotency'],
         );
         return { equivalent: comparison.equivalent, differences: comparison.differences };
       },
