@@ -26,11 +26,8 @@ async function main() {
     // ledger through 018, with all canonical objects except instruments. The
     // bridge comparator ignores only that table and its indexes/constraints.
     const expectedAppliedNames = plan.baselineRecords
-      .map(({ name }) => name.match(/^(\\d{3})_/))
-      .map((match, index) => ({ match, name: plan.baselineRecords[index]?.name }))
-      .filter(({ match }) => match !== null && Number(match[1]) <= 18)
       .map(({ name }) => name)
-      .filter((name) => typeof name === 'string');
+      .filter((name) => /^[0-9]{3}_/.test(name) && Number(name.slice(0, 3)) <= 18);
     legacySchemaBridge = {
       migrationName: '024_add_instruments.sql',
       expectedAppliedNames,
