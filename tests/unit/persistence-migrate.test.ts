@@ -41,6 +41,13 @@ describe('forward-only migration metadata', () => {
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
   });
+  test('loads the additive 024 instruments migration with migration origin', async () => {
+    const plan = await loadMigrationPlan(rootDir);
+    expect(plan.migrations.map(({ record }) => record.name)).toEqual(['024_add_instruments.sql']);
+    expect(plan.migrations[0]?.record.origin).toBe('migration');
+    expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
+    expect(plan.allRecords.some((record) => record.name === '024_add_instruments.sql')).toBe(true);
+  });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
     const plan = await loadMigrationPlan(rootDir);
     const report = await readFile(path.join(rootDir, 'docs', 'DB-BASELINE.md'), 'utf8');
