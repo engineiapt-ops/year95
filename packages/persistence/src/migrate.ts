@@ -246,9 +246,12 @@ export async function runMigrations(db: MigrationDatabase, options: RunMigration
     } else {
       const comparison = await compareExisting(options.compareExistingSchema);
       if (!comparison.equivalent) {
-        if (!options.legacySchemaBridge) assertComparisonEquivalent(comparison);
-        await applyLegacySchemaBridge(db, columns, plan, options.legacySchemaBridge);
-        await assertEquivalent(options.compareExistingSchema);
+        if (!options.legacySchemaBridge) {
+          assertComparisonEquivalent(comparison);
+        } else {
+          await applyLegacySchemaBridge(db, columns, plan, options.legacySchemaBridge);
+          await assertEquivalent(options.compareExistingSchema);
+        }
       }
     }
     await upgradeLegacyTracker(db, columns, plan);
