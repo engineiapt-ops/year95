@@ -184,7 +184,7 @@ integrationTest('legacy bridge rolls back all repair migrations when idempotency
       plan,
       compareExistingSchema,
       legacySchemaBridge: bridge,
-    })).rejects.toThrow(/duplicate key|unique constraint/i);
+    })).rejects.toThrow(/unique index|duplicated|duplicate key/i);
 
     const instruments = await target.queryRows<{ exists: boolean }>(
       "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments') AS exists",
