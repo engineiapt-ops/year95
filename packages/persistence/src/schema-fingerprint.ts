@@ -88,8 +88,8 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
     return {
       ...trigger,
       function_definition: definition.replace(
-        /\\nSET search_path TO (?:'pg_catalog'|"pg_catalog"|pg_catalog)\\n/g,
-        '\\n',
+        /\nSET search_path TO (?:'pg_catalog'|"pg_catalog"|pg_catalog)\n/g,
+        '\n',
       ),
     };
   });
