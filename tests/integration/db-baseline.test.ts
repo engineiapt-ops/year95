@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { runMigrations, type MigrationDatabase, type SqlStatement } from '../../packages/persistence/src/migrate.js';
-import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables } from '../../packages/persistence/src/schema-fingerprint.js';
+import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTablesAndIndexes } from '../../packages/persistence/src/schema-fingerprint.js';
 import { loadMigrationPlan } from '../../tools/migration-files.mjs';
 import { PsqlDatabaseClient } from '../../tools/postgres-client.mjs';
 
@@ -53,6 +53,7 @@ async function createLegacyFixture(
   const statements: SqlStatement[] = [
     { sql: schemaSql },
     { sql: 'DROP TABLE instruments' },
+    { sql: 'DROP INDEX "' + targetSchema + '".idx_decision_log_paper_idempotency' },
   ];
   if (withUnrecognizedDrift) {
     statements.push({ sql: 'ALTER TABLE market_data ADD COLUMN legacy_drift TEXT' });
@@ -81,7 +82,7 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
       return { equivalent: comparison.equivalent, differences: comparison.differences };
     };
     const bridge = {
-      migrationName: '024_add_instruments.sql',
+      migrationNames: ['024_add_instruments.sql', '025_add_decision_log_paper_idempotency.sql'],
       expectedAppliedNames: legacyHistoryThrough018,
       compareSchema: async () => {
         const instrumentTable = await target.queryRows<{ exists: boolean }>(
@@ -91,8 +92,16 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
         if (instrumentTable[0]?.exists === true) {
           return { equivalent: false, differences: ['instruments must be absent for the supported 024 bridge'] };
         }
-        const comparison = await compareSchemaFingerprintsIgnoringTables(
-          reference, target, referenceSchema, targetSchema, ['instruments'],
+        const idempotencyIndex = await target.queryRows<{ exists: boolean }>(
+          'SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS exists',
+          [targetSchema, 'idx_decision_log_paper_idempotency'],
+        );
+        if (idempotencyIndex[0]?.exists === true) {
+          return { equivalent: false, differences: ['idx_decision_log_paper_idempotency must be absent for the supported legacy bridge'] };
+        }
+        const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+          reference, target, referenceSchema, targetSchema,
+          ['instruments'], ['idx_decision_log_paper_idempotency'],
         );
         return { equivalent: comparison.equivalent, differences: comparison.differences };
       },
@@ -113,6 +122,7 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
     expect(applied.filter((row) => row.origin === 'baseline')).toHaveLength(24);
     expect(applied.filter((row) => row.origin === 'migration')).toEqual([
       { name: '024_add_instruments.sql', origin: 'migration' },
+      { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
     ]);
     expect(applied.map((row) => row.name)).toContain('schema.sql');
 
@@ -128,12 +138,76 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
   });
 });
 
+integrationTest('legacy bridge rolls back all repair migrations when idempotency keys collide', async () => {
+  await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
+    await reference.transaction([{ sql: schemaSql }]);
+    await createLegacyFixture(target, targetSchema);
+    await target.transaction([
+      {
+        sql: "INSERT INTO decision_log (ativo, timeframe, decision_at, data_as_of, origem, recomendacao, tamanho_posicao_pct, reference_price) VALUES ('BTCUSDT', '1h', TIMESTAMPTZ '2026-01-01 00:01:00+00', TIMESTAMPTZ '2026-01-01 00:00:00+00', 'baseline', 'BUY', 1.5, 100)",
+      },
+      {
+        sql: "INSERT INTO decision_log (ativo, timeframe, decision_at, data_as_of, origem, recomendacao, tamanho_posicao_pct, reference_price) VALUES ('BTCUSDT', '1h', TIMESTAMPTZ '2026-01-01 00:02:00+00', TIMESTAMPTZ '2026-01-01 00:00:00+00', 'baseline', 'BUY', 1.5, 100)",
+      },
+    ]);
+    const compareExistingSchema = async () => {
+      const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+      return { equivalent: comparison.equivalent, differences: comparison.differences };
+    };
+    const bridge = {
+      migrationNames: ['024_add_instruments.sql', '025_add_decision_log_paper_idempotency.sql'],
+      expectedAppliedNames: legacyHistoryThrough018,
+      compareSchema: async () => {
+        const instrumentTable = await target.queryRows<{ exists: boolean }>(
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments' AND table_type = 'BASE TABLE') AS exists",
+          [targetSchema],
+        );
+        if (instrumentTable[0]?.exists === true) {
+          return { equivalent: false, differences: ['instruments must be absent for the supported legacy bridge'] };
+        }
+        const idempotencyIndex = await target.queryRows<{ exists: boolean }>(
+          'SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS exists',
+          [targetSchema, 'idx_decision_log_paper_idempotency'],
+        );
+        if (idempotencyIndex[0]?.exists === true) {
+          return { equivalent: false, differences: ['idx_decision_log_paper_idempotency must be absent for the supported legacy bridge'] };
+        }
+        const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+          reference, target, referenceSchema, targetSchema,
+          ['instruments'], ['idx_decision_log_paper_idempotency'],
+        );
+        return { equivalent: comparison.equivalent, differences: comparison.differences };
+      },
+    };
+
+    await expect(runMigrations(target, {
+      plan,
+      compareExistingSchema,
+      legacySchemaBridge: bridge,
+    })).rejects.toThrow(/duplicate key|unique constraint/i);
+
+    const instruments = await target.queryRows<{ exists: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instruments') AS exists",
+      [targetSchema],
+    );
+    expect(instruments[0]?.exists).toBe(false);
+    const migrationRows = await target.queryRows<{ filename: string }>(
+      "SELECT filename FROM schema_migrations WHERE filename IN ('024_add_instruments.sql', '025_add_decision_log_paper_idempotency.sql') ORDER BY filename",
+    );
+    expect(migrationRows).toEqual([]);
+    const oldHistoryCount = await target.queryRows<{ count: number | string }>(
+      'SELECT COUNT(*)::int AS count FROM schema_migrations',
+    );
+    expect(Number(oldHistoryCount[0]?.count)).toBe(18);
+  });
+});
+
 integrationTest('legacy bridge refuses unrelated schema drift before any bridge write', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction([{ sql: schemaSql }]);
     await createLegacyFixture(target, targetSchema, true);
     const bridge = {
-      migrationName: '024_add_instruments.sql',
+      migrationNames: ['024_add_instruments.sql', '025_add_decision_log_paper_idempotency.sql'],
       expectedAppliedNames: legacyHistoryThrough018,
       compareSchema: async () => {
         const instrumentTable = await target.queryRows<{ exists: boolean }>(
@@ -143,8 +217,16 @@ integrationTest('legacy bridge refuses unrelated schema drift before any bridge 
         if (instrumentTable[0]?.exists === true) {
           return { equivalent: false, differences: ['instruments must be absent for the supported 024 bridge'] };
         }
-        const comparison = await compareSchemaFingerprintsIgnoringTables(
-          reference, target, referenceSchema, targetSchema, ['instruments'],
+        const idempotencyIndex = await target.queryRows<{ exists: boolean }>(
+          'SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS exists',
+          [targetSchema, 'idx_decision_log_paper_idempotency'],
+        );
+        if (idempotencyIndex[0]?.exists === true) {
+          return { equivalent: false, differences: ['idx_decision_log_paper_idempotency must be absent for the supported legacy bridge'] };
+        }
+        const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+          reference, target, referenceSchema, targetSchema,
+          ['instruments'], ['idx_decision_log_paper_idempotency'],
         );
         return { equivalent: comparison.equivalent, differences: comparison.differences };
       },
@@ -199,6 +281,7 @@ integrationTest('canonical baseline includes the final effects of historical mig
       'idx_wf_portfolio_folds_run',
       'idx_wf_portfolio_equity_run_time',
       'idx_instruments_enabled',
+      'idx_decision_log_paper_idempotency',
     ]));
 
     const instruments = await target.queryRows<{

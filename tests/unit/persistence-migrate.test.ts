@@ -41,12 +41,19 @@ describe('forward-only migration metadata', () => {
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
   });
-  test('loads the additive 024 instruments migration with migration origin', async () => {
+  test('loads additive migrations 024-025 with migration origin', async () => {
     const plan = await loadMigrationPlan(rootDir);
-    expect(plan.migrations.map(({ record }) => record.name)).toEqual(['024_add_instruments.sql']);
+    expect(plan.migrations.map(({ record }) => record.name)).toEqual([
+      '024_add_instruments.sql',
+      '025_add_decision_log_paper_idempotency.sql',
+    ]);
     expect(plan.migrations[0]?.record.origin).toBe('migration');
     expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
+    expect(plan.migrations[1]?.record.origin).toBe('migration');
+    expect(plan.migrations[1]?.sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS idx_decision_log_paper_idempotency');
+    expect(plan.migrations[1]?.sql).toContain('WHERE backtest_run_id IS NULL');
     expect(plan.allRecords.some((record) => record.name === '024_add_instruments.sql')).toBe(true);
+    expect(plan.allRecords.some((record) => record.name === '025_add_decision_log_paper_idempotency.sql')).toBe(true);
   });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
     const plan = await loadMigrationPlan(rootDir);
