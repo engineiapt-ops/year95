@@ -27,7 +27,8 @@ Keep Supabase/Postgres. Compare tracked schema, migrations and the real database
 - Historical migrations 001–023 remain content-preserved and SHA-256 tracked; they are recorded as baseline history but are not re-executed against the final schema.
 - An existing database is never bootstrapped. Missing baseline metadata is recorded only after a supplied comparator proves structural equivalence for tables/views, columns, constraints, indexes, triggers and trigger functions.
 - db/migrations/024+ is forward-only and additive. pnpm check:migrations scans only this directory and intentionally excludes the immutable baseline archive.
-- The optional live Supabase comparison uses a read-only connection and catalog SELECTs only. This PR performs no live database writes.
+- The optional live Supabase comparison uses a read-only connection and catalog SELECTs only. PR #17 corrected the canonical schema and passed CI without live database writes.
+- Migration 024 is an idempotent additive instruments migration. A narrowly scoped bridge may apply it only when the old filename ledger matches migrations 001–018 exactly and the read-only fingerprint matches canonical state excluding only instruments; the full canonical fingerprint must pass before the legacy ledger is upgraded. Unknown history or any other schema drift fails closed. No live database write is part of PR #18.
 ## D8 — Authorization
 JWT userId flows through services into owner-scoped repositories. RLS is defense in depth, not the sole authorization boundary.
 
