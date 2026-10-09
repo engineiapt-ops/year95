@@ -38,6 +38,131 @@ async function withSchemas(
   }
 }
 
+integrationTest('canonical baseline includes the final effects of historical migrations 008-009 and 022-023', async () => {
+  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+    await target.transaction([{ sql: schemaSql }]);
+
+    const tables = await target.queryRows<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name",
+      [targetSchema],
+    );
+    expect(tables.map((row) => row.table_name)).toEqual(expect.arrayContaining([
+      'walk_forward_portfolio_runs',
+      'walk_forward_portfolio_folds',
+      'walk_forward_portfolio_equity',
+      'instruments',
+    ]));
+
+    const indexes = await target.queryRows<{ indexname: string }>(
+      'SELECT indexname FROM pg_indexes WHERE schemaname = $1 ORDER BY indexname',
+      [targetSchema],
+    );
+    expect(indexes.map((row) => row.indexname)).toEqual(expect.arrayContaining([
+      'idx_wf_portfolio_runs_wf',
+      'idx_wf_portfolio_folds_run',
+      'idx_wf_portfolio_equity_run_time',
+      'idx_instruments_enabled',
+    ]));
+
+    const instruments = await target.queryRows<{
+      symbol: string;
+      venue: string;
+      data_provider: string;
+      metadata_status: string;
+      enabled: boolean;
+    }>(
+      'SELECT symbol, venue, data_provider, metadata_status, enabled FROM instruments ORDER BY symbol',
+    );
+    expect(instruments).toEqual([
+      {
+        symbol: 'BTCUSD',
+        venue: 'ig',
+        data_provider: 'TODO_CONFIRMAR_NA_CORRETORA',
+        metadata_status: 'pending_broker_confirmation',
+        enabled: false,
+      },
+      {
+        symbol: 'BTCUSDT',
+        venue: 'binance_spot',
+        data_provider: 'Binance Spot',
+        metadata_status: 'verified',
+        enabled: true,
+      },
+      {
+        symbol: 'EURUSD',
+        venue: 'saxo',
+        data_provider: 'saxo-sim',
+        metadata_status: 'pending_broker_confirmation',
+        enabled: false,
+      },
+      {
+        symbol: 'US500',
+        venue: 'ig',
+        data_provider: 'TODO_CONFIRMAR_NA_CORRETORA',
+        metadata_status: 'pending_broker_confirmation',
+        enabled: false,
+      },
+    ]);
+  });
+});
+
+integrationTest('canonical baseline keeps database objects server-side when Supabase roles exist', async () => {
+  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+    await target.transaction([{ sql: schemaSql }]);
+    await target.transaction([{
+      sql: 'CREATE TABLE baseline_future_privilege_probe (id BIGSERIAL PRIMARY KEY, note TEXT NOT NULL)',
+    }]);
+
+    const publicFunctionGrants = await target.queryRows<{ specific_name: string }>(
+      "SELECT specific_name FROM information_schema.routine_privileges WHERE specific_schema = $1 AND grantee = 'PUBLIC' AND privilege_type = 'EXECUTE' ORDER BY specific_name",
+      [targetSchema],
+    );
+    expect(publicFunctionGrants).toEqual([]);
+
+    const roles = await target.queryRows<{ rolname: string }>(
+      "SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated') ORDER BY rolname",
+    );
+    for (const { rolname } of roles) {
+      const tableGrants = await target.queryRows<{ table_name: string }>(
+        [
+          'SELECT c.relname AS table_name FROM pg_class c',
+          'JOIN pg_namespace n ON n.oid = c.relnamespace',
+          "WHERE n.nspname = $2 AND c.relkind IN ('r', 'p') AND (",
+          "has_table_privilege($1, c.oid, 'SELECT') OR has_table_privilege($1, c.oid, 'INSERT') OR",
+          "has_table_privilege($1, c.oid, 'UPDATE') OR has_table_privilege($1, c.oid, 'DELETE') OR",
+          "has_table_privilege($1, c.oid, 'TRUNCATE') OR has_table_privilege($1, c.oid, 'REFERENCES') OR",
+          "has_table_privilege($1, c.oid, 'TRIGGER')) ORDER BY c.relname",
+        ].join(' '),
+        [rolname, targetSchema],
+      );
+      expect(tableGrants, rolname + ' has unexpected table privileges').toEqual([]);
+
+      const sequenceGrants = await target.queryRows<{ sequence_name: string }>(
+        [
+          'SELECT c.relname AS sequence_name FROM pg_class c',
+          'JOIN pg_namespace n ON n.oid = c.relnamespace',
+          "WHERE n.nspname = $2 AND c.relkind = 'S' AND (",
+          "has_sequence_privilege($1, c.oid, 'USAGE') OR has_sequence_privilege($1, c.oid, 'SELECT') OR",
+          "has_sequence_privilege($1, c.oid, 'UPDATE')) ORDER BY c.relname",
+        ].join(' '),
+        [rolname, targetSchema],
+      );
+      expect(sequenceGrants, rolname + ' has unexpected sequence privileges').toEqual([]);
+
+      const functionGrants = await target.queryRows<{ routine_name: string }>(
+        [
+          'SELECT p.proname AS routine_name FROM pg_proc p',
+          'JOIN pg_namespace n ON n.oid = p.pronamespace',
+          "WHERE n.nspname = $2 AND has_function_privilege($1, p.oid, 'EXECUTE')",
+          'ORDER BY p.proname',
+        ].join(' '),
+        [rolname, targetSchema],
+      );
+      expect(functionGrants, rolname + ' has unexpected function privileges').toEqual([]);
+    }
+  });
+});
+
 integrationTest('empty database baseline equals canonical schema.sql structure', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction([{ sql: schemaSql }]);
