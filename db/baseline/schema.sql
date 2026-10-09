@@ -508,3 +508,178 @@ DROP TRIGGER IF EXISTS system_validation_snapshots_immutable ON system_validatio
 CREATE TRIGGER system_validation_snapshots_immutable
   BEFORE UPDATE OR DELETE ON system_validation_snapshots
   FOR EACH ROW EXECUTE FUNCTION reject_system_validation_snapshot_mutation();
+
+ 
+-- Final effects of historical migrations 008 and 009.
+CREATE TABLE IF NOT EXISTS walk_forward_portfolio_runs (
+  id BIGSERIAL PRIMARY KEY,
+  walk_forward_run_id BIGINT NOT NULL REFERENCES walk_forward_runs(id) ON DELETE CASCADE,
+  strategy TEXT NOT NULL CHECK (strategy IN ('baseline', 'baseline_risk')),
+  initial_capital NUMERIC NOT NULL,
+  position_size_pct NUMERIC NOT NULL,
+  max_gross_exposure_pct NUMERIC NOT NULL,
+  portfolio_model_version TEXT NOT NULL,
+  final_equity NUMERIC NOT NULL DEFAULT 0,
+  total_return_pct NUMERIC NOT NULL DEFAULT 0,
+  cagr_pct NUMERIC,
+  max_drawdown_pct NUMERIC NOT NULL DEFAULT 0,
+  sharpe NUMERIC,
+  sortino NUMERIC,
+  total_signals INT NOT NULL DEFAULT 0,
+  executed_trades INT NOT NULL DEFAULT 0,
+  closed_trades INT NOT NULL DEFAULT 0,
+  rejected_trades INT NOT NULL DEFAULT 0,
+  winning_trades INT NOT NULL DEFAULT 0,
+  losing_trades INT NOT NULL DEFAULT 0,
+  total_realized_pnl NUMERIC NOT NULL DEFAULT 0,
+  total_fees NUMERIC NOT NULL DEFAULT 0,
+  total_slippage NUMERIC NOT NULL DEFAULT 0,
+  max_open_positions INT NOT NULL DEFAULT 0,
+  max_gross_exposure NUMERIC NOT NULL DEFAULT 0,
+  risk_gate_blocks INT NOT NULL DEFAULT 0,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (walk_forward_run_id, strategy)
+);
+
+CREATE TABLE IF NOT EXISTS walk_forward_portfolio_folds (
+  id BIGSERIAL PRIMARY KEY,
+  walk_forward_portfolio_run_id BIGINT NOT NULL REFERENCES walk_forward_portfolio_runs(id) ON DELETE CASCADE,
+  walk_forward_run_id BIGINT NOT NULL REFERENCES walk_forward_runs(id) ON DELETE CASCADE,
+  fold_number INT NOT NULL,
+  initial_capital NUMERIC NOT NULL,
+  final_equity NUMERIC NOT NULL,
+  total_return_pct NUMERIC NOT NULL DEFAULT 0,
+  max_drawdown_pct NUMERIC NOT NULL DEFAULT 0,
+  sharpe NUMERIC,
+  sortino NUMERIC,
+  total_signals INT NOT NULL DEFAULT 0,
+  executed_trades INT NOT NULL DEFAULT 0,
+  closed_trades INT NOT NULL DEFAULT 0,
+  rejected_trades INT NOT NULL DEFAULT 0,
+  winning_trades INT NOT NULL DEFAULT 0,
+  losing_trades INT NOT NULL DEFAULT 0,
+  total_realized_pnl NUMERIC NOT NULL DEFAULT 0,
+  total_fees NUMERIC NOT NULL DEFAULT 0,
+  total_slippage NUMERIC NOT NULL DEFAULT 0,
+  max_open_positions INT NOT NULL DEFAULT 0,
+  max_gross_exposure NUMERIC NOT NULL DEFAULT 0,
+  risk_gate_blocks INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (walk_forward_portfolio_run_id, fold_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wf_portfolio_runs_wf
+  ON walk_forward_portfolio_runs(walk_forward_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_wf_portfolio_folds_run
+  ON walk_forward_portfolio_folds(walk_forward_portfolio_run_id, fold_number);
+
+CREATE TABLE IF NOT EXISTS walk_forward_portfolio_equity (
+  id BIGSERIAL PRIMARY KEY,
+  walk_forward_portfolio_run_id BIGINT NOT NULL REFERENCES walk_forward_portfolio_runs(id) ON DELETE CASCADE,
+  fold_number INT NOT NULL,
+  as_of TIMESTAMPTZ NOT NULL,
+  equity NUMERIC NOT NULL,
+  cash NUMERIC NOT NULL,
+  realized_pnl NUMERIC NOT NULL DEFAULT 0,
+  unrealized_pnl NUMERIC NOT NULL DEFAULT 0,
+  gross_exposure NUMERIC NOT NULL DEFAULT 0,
+  open_positions INT NOT NULL DEFAULT 0,
+  drawdown_pct NUMERIC NOT NULL DEFAULT 0,
+  UNIQUE (walk_forward_portfolio_run_id, as_of)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wf_portfolio_equity_run_time
+  ON walk_forward_portfolio_equity(walk_forward_portfolio_run_id, as_of);
+
+-- Final effects of historical migrations 022 and 023, including initial reference rows.
+CREATE TABLE IF NOT EXISTS instruments (
+  symbol TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  asset_class TEXT NOT NULL CHECK (asset_class IN ('crypto_spot', 'cfd')),
+  venue TEXT NOT NULL CHECK (venue IN ('binance_spot', 'saxo', 'ig', 'xtb')),
+  base_currency TEXT NOT NULL,
+  quote_currency TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  data_provider TEXT NOT NULL,
+  metadata_status TEXT NOT NULL CHECK (
+    metadata_status IN ('verified', 'pending_broker_confirmation')
+  ),
+  metadata_source TEXT NOT NULL,
+  min_order_size NUMERIC,
+  max_order_size NUMERIC,
+  leverage NUMERIC,
+  margin_percent NUMERIC,
+  spread NUMERIC,
+  overnight_financing NUMERIC,
+  commission NUMERIC,
+  trading_hours TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_instruments_enabled
+  ON instruments(enabled);
+
+INSERT INTO instruments (
+  symbol, display_name, asset_class, venue, base_currency, quote_currency,
+  enabled, data_provider, metadata_status, metadata_source, trading_hours
+)
+VALUES (
+  'BTCUSDT', 'Bitcoin / Tether', 'crypto_spot', 'binance_spot', 'BTC', 'USDT',
+  TRUE, 'Binance Spot', 'verified', 'Binance Spot exchangeInfo endpoint', '24/7'
+)
+ON CONFLICT (symbol) DO NOTHING;
+
+INSERT INTO instruments (
+  symbol, display_name, asset_class, venue, base_currency, quote_currency,
+  enabled, data_provider, metadata_status, metadata_source
+)
+VALUES
+  ('EURUSD', 'Euro / US Dollar CFD', 'cfd', 'saxo', 'EUR', 'USD', FALSE,
+   'saxo-sim', 'pending_broker_confirmation',
+   'Saxo OpenAPI Reference Data; account-specific validation required'),
+  ('US500', 'US 500 CFD', 'cfd', 'ig', 'USD', 'USD', FALSE,
+   'TODO_CONFIRMAR_NA_CORRETORA', 'pending_broker_confirmation', 'TODO_CONFIRMAR_NA_CORRETORA'),
+  ('BTCUSD', 'Bitcoin / US Dollar CFD', 'cfd', 'ig', 'BTC', 'USD', FALSE,
+   'TODO_CONFIRMAR_NA_CORRETORA', 'pending_broker_confirmation', 'TODO_CONFIRMAR_NA_CORRETORA')
+ON CONFLICT (symbol) DO NOTHING;
+
+-- Preserve the server-side-only privilege state from historical migrations 019 and 020.
+-- Supabase roles are optional in a plain local PostgreSQL instance, so each revoke is guarded.
+DO $year95_privileges$
+DECLARE
+  target_schema_name TEXT := current_schema();
+BEGIN
+  EXECUTE format(
+    'REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA %I FROM PUBLIC',
+    target_schema_name
+  );
+  EXECUTE format(
+    'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC',
+    target_schema_name
+  );
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA %I FROM anon', target_schema_name);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA %I FROM anon', target_schema_name);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA %I FROM anon', target_schema_name);
+    EXECUTE format('REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA %I FROM anon', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE ALL ON TABLES FROM anon', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE ALL ON SEQUENCES FROM anon', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE ALL ON FUNCTIONS FROM anon', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE EXECUTE ON FUNCTIONS FROM anon', target_schema_name);
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA %I FROM authenticated', target_schema_name);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA %I FROM authenticated', target_schema_name);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA %I FROM authenticated', target_schema_name);
+    EXECUTE format('REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA %I FROM authenticated', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE ALL ON TABLES FROM authenticated', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE ALL ON SEQUENCES FROM authenticated', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE ALL ON FUNCTIONS FROM authenticated', target_schema_name);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA %I REVOKE EXECUTE ON FUNCTIONS FROM authenticated', target_schema_name);
+  END IF;
+END
+$year95_privileges$;
