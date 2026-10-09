@@ -88,7 +88,7 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
     return {
       ...trigger,
       function_definition: definition.replace(
-        /\nSET search_path TO (?:'pg_catalog'|"pg_catalog"|pg_catalog)\n/g,
+        /\n\s*SET search_path\s+(?:TO|=)\s*(?:'pg_catalog'|"pg_catalog"|pg_catalog)\s*\n/g,
         '\n',
       ),
     };
