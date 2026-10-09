@@ -39,7 +39,7 @@ A blank database is bootstrapped from `db/baseline/schema.sql`. The 23 historica
 
 ## Schema comparison
 
-The structural fingerprint covers tables/views, ordered column definitions (types, defaults and nullability), constraints and definitions, index definitions, and non-internal triggers plus trigger-function definitions. The comparison is read-only and normalizes schema names before equality checks.
+The structural fingerprint covers tables/views, ordered column definitions (types, defaults and nullability), constraints and definitions, index definitions, and non-internal triggers plus trigger-function definitions. It normalizes schema names and strips only the exact `SET search_path TO 'pg_catalog'` function configuration clause from `pg_get_functiondef()`; the five function settings are independently asserted by the RLS/search-path integration test.
 
 The optional Supabase comparison is separate and read-only. `tools/db-baseline.mjs` refuses to run unless `DB_BASELINE_DISPOSABLE=1` is set, to guard its temporary-schema DDL. If `SUPABASE_READONLY_DATABASE_URL` is supplied, the comparator uses the connection only for read-only catalog SELECTs. No live database has been accessed by this PR.
 

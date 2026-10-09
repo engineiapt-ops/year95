@@ -123,6 +123,7 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
     expect(applied.filter((row) => row.origin === 'migration')).toEqual([
       { name: '024_add_instruments.sql', origin: 'migration' },
       { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
+      { name: '026_enable_rls_and_pin_audit_search_path.sql', origin: 'migration' },
     ]);
     expect(applied.map((row) => row.name)).toContain('schema.sql');
 
@@ -254,6 +255,78 @@ integrationTest('legacy bridge refuses unrelated schema drift before any bridge 
       [targetSchema],
     );
     expect(legacyColumns.map((row) => row.column_name)).toEqual(['applied_at', 'filename']);
+  });
+});
+
+integrationTest('migration 026 enables default-deny RLS on all public tables and pins immutable audit function search_path', async () => {
+  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+    await runMigrations(target, { plan });
+
+    const rls = await target.queryRows<{ table_name: string; rls_enabled: boolean }>(
+      [
+        'SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled',
+        'FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace',
+        "WHERE n.nspname = $1 AND c.relkind = 'r'",
+        'ORDER BY c.relname',
+      ].join(' '),
+      [targetSchema],
+    );
+    expect(rls.map((row) => row.table_name)).toEqual([
+      'backtest_runs',
+      'benchmark_results',
+      'benchmark_runs',
+      'config',
+      'decision_log',
+      'instruments',
+      'logs',
+      'market_data',
+      'oos_validation_gate_audits',
+      'outcome_settlement_audits',
+      'paper_trades',
+      'pipeline_audit_snapshots',
+      'portfolio_equity_curve',
+      'portfolio_positions',
+      'portfolio_runs',
+      'research_snapshots',
+      'schema_migrations',
+      'signals',
+      'system_validation_snapshots',
+      'walk_forward_folds',
+      'walk_forward_portfolio_equity',
+      'walk_forward_portfolio_folds',
+      'walk_forward_portfolio_runs',
+      'walk_forward_runs',
+    ]);
+    expect(rls.every((row) => row.rls_enabled)).toBe(true);
+
+    const policies = await target.queryRows<{ policy_count: number | string }>(
+      'SELECT COUNT(*)::int AS policy_count FROM pg_policies WHERE schemaname = $1',
+      [targetSchema],
+    );
+    expect(Number(policies[0]?.policy_count)).toBe(0);
+
+    const functions = await target.queryRows<{ proname: string; proconfig: string[] | null }>(
+      [
+        'SELECT p.proname, p.proconfig',
+        'FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace',
+        'WHERE n.nspname = $1 AND p.proname IN (',
+        "'reject_oos_validation_gate_audit_mutation',",
+        "'reject_outcome_settlement_audit_mutation',",
+        "'reject_pipeline_audit_snapshot_mutation',",
+        "'reject_research_snapshot_mutation',",
+        "'reject_system_validation_snapshot_mutation'",
+        ') ORDER BY p.proname',
+      ].join(' '),
+      [targetSchema],
+    );
+    expect(functions.map((row) => row.proname)).toEqual([
+      'reject_oos_validation_gate_audit_mutation',
+      'reject_outcome_settlement_audit_mutation',
+      'reject_pipeline_audit_snapshot_mutation',
+      'reject_research_snapshot_mutation',
+      'reject_system_validation_snapshot_mutation',
+    ]);
+    expect(functions.every((row) => row.proconfig?.includes('search_path=pg_catalog'))).toBe(true);
   });
 });
 
