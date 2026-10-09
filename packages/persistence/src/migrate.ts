@@ -15,8 +15,8 @@ export interface MigrationPlan {
 }
 export interface SchemaComparison { equivalent: boolean; differences?: readonly string[] }
 export interface LegacySchemaBridge {
-  /** Exact new migration that converts the supported legacy schema to the canonical baseline. */
-  migrationName: string;
+  /** Ordered additive migrations that atomically convert the supported legacy schema to the canonical baseline. */
+  migrationNames: readonly string[];
   /** Exact historical filename set accepted before the bridge is allowed to run. */
   expectedAppliedNames: readonly string[];
   /** Read-only comparator for the supported legacy schema, excluding only known missing objects. */
@@ -154,22 +154,30 @@ async function applyLegacySchemaBridge(
     throw new Error('The compatibility bridge only accepts the recognized legacy filename ledger');
   }
   assertExpectedLegacyHistory(await legacyTrackerNames(db, columns), bridge.expectedAppliedNames);
-  const migration = plan.migrations.find(({ record }) => record.name === bridge.migrationName);
-  if (!migration) {
-    throw new Error('Supported legacy bridge migration is not present in the migration plan: ' + bridge.migrationName);
+  if (bridge.migrationNames.length === 0 ||
+      new Set(bridge.migrationNames).size !== bridge.migrationNames.length) {
+    throw new Error('Legacy schema bridge must declare a non-empty, unique ordered migration list');
   }
+  const migrations = bridge.migrationNames.map((migrationName) => {
+    const migration = plan.migrations.find(({ record }) => record.name === migrationName);
+    if (!migration) {
+      throw new Error('Supported legacy bridge migration is not present in the migration plan: ' + migrationName);
+    }
+    return migration;
+  });
   const comparison = await bridge.compareSchema();
   if (!comparison.equivalent) {
     const details = comparison.differences?.length ? ': ' + comparison.differences.join('; ') : '';
-    throw new Error('Existing database does not match the supported legacy schema for ' + bridge.migrationName + details);
+    throw new Error('Existing database does not match the supported legacy schema for ' +
+      bridge.migrationNames.join(', ') + details);
   }
-  // Apply the additive bridge and record it atomically in the existing filename ledger.
+  // Apply every bridge migration and record its filename atomically in the legacy ledger.
   await db.transaction([
-    { sql: migration.sql },
-    {
+    ...migrations.map(({ sql }) => ({ sql })),
+    ...migrations.map(({ record }) => ({
       sql: 'INSERT INTO schema_migrations (filename) VALUES ($1)',
-      values: [migration.record.name],
-    },
+      values: [record.name],
+    })),
   ]);
 }
 async function upgradeLegacyTracker(

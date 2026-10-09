@@ -142,3 +142,37 @@ export async function compareSchemaFingerprintsIgnoringTables(
     filterExcludedTables(actual, excluded),
   );
 }
+
+/**
+ * Compares a known legacy state while excluding only explicitly named missing tables
+ * and indexes. All other fingerprint categories remain exact, so this cannot hide
+ * unrelated schema drift.
+ */
+export async function compareSchemaFingerprintsIgnoringTablesAndIndexes(
+  expectedDb: MigrationDatabase,
+  actualDb: MigrationDatabase,
+  expectedSchema: string,
+  actualSchema: string,
+  excludedTableNames: readonly string[],
+  excludedIndexNames: readonly string[],
+): Promise<SchemaFingerprintComparison> {
+  const [expected, actual] = await Promise.all([
+    schemaFingerprint(expectedDb, expectedSchema),
+    schemaFingerprint(actualDb, actualSchema),
+  ]);
+  const excludedTables = new Set(excludedTableNames);
+  const excludedIndexes = new Set(excludedIndexNames);
+  const filterKnownMissingObjects = (fingerprint: SchemaFingerprint): SchemaFingerprint => {
+    const tablesFiltered = filterExcludedTables(fingerprint, excludedTables);
+    return {
+      ...tablesFiltered,
+      indexes: tablesFiltered.indexes.filter((row) =>
+        typeof row.index_name !== 'string' || !excludedIndexes.has(row.index_name),
+      ),
+    };
+  };
+  return compareFingerprints(
+    filterKnownMissingObjects(expected),
+    filterKnownMissingObjects(actual),
+  );
+}
