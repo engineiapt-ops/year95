@@ -30,7 +30,7 @@ Keep Supabase/Postgres. Compare tracked schema, migrations and the real database
 - The optional live Supabase comparison uses a read-only connection and catalog SELECTs only. PR #17 corrected the canonical schema and passed CI without live database writes.
 - Migration 024 adds the provider-neutral instruments registry; migration 025 restores the historical partial unique paper-idempotency index. Both are additive and idempotent. A narrowly scoped legacy bridge may apply 024 and 025 atomically only when the old filename ledger matches migrations 001–018 exactly, instruments and the named idempotency index are both absent, and the read-only fingerprint matches canonical state after excluding only those two known objects. The full canonical fingerprint must pass before the legacy ledger is upgraded. Unknown history, either object already present, or any other schema drift fails closed. Live Supabase data is never changed by CI.
 ## D8 — Authorization
-JWT userId flows through services into owner-scoped repositories. RLS is defense in depth, not the sole authorization boundary.
+JWT userId flows through services into owner-scoped repositories. RLS is defense in depth, not the sole authorization boundary. Migration 026 enables RLS on every public table, including the application migration ledger, and deliberately adds no client policies or grants; direct `anon` and `authenticated` table access remains default-deny. Database-owner/backend connections retain their existing server-side path. Immutable audit trigger functions pin `search_path` to `pg_catalog` because they use only `RAISE EXCEPTION` and no application objects.
 
 ## D9 — Infrastructure independence
 No Vercel OIDC, AI Gateway, Vercel runtime dependency or Vercel cron.
