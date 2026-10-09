@@ -78,7 +78,24 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
     ].join(' '),
     [schemaName],
   );
-  return normalizeSchemaName({ tables, columns, constraints, indexes, triggers }, schemaName) as SchemaFingerprint;
+  // A security migration may pin a trigger function to the inert pg_catalog-only
+  // search path. PostgreSQL includes that SET clause in pg_get_functiondef(), but
+  // it is runtime configuration rather than a change to the trigger's executable
+  // body. Strip only this exact approved clause; compare every other function line.
+  const normalizedTriggers = triggers.map((trigger) => {
+    const definition = trigger.function_definition;
+    if (typeof definition !== 'string') return trigger;
+    return {
+      ...trigger,
+      function_definition: definition.replace(
+        /\\nSET search_path TO (?:'pg_catalog'|"pg_catalog"|pg_catalog)\\n/g,
+        '\\n',
+      ),
+    };
+  });
+  return normalizeSchemaName({
+    tables, columns, constraints, indexes, triggers: normalizedTriggers,
+  }, schemaName) as SchemaFingerprint;
 }
 function filterExcludedTables(
   fingerprint: SchemaFingerprint,
