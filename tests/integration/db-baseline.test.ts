@@ -8,6 +8,14 @@ import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTablesAndIn
 import { loadMigrationPlan } from '../../tools/migration-files.mjs';
 import { PsqlDatabaseClient } from '../../tools/postgres-client.mjs';
 
+import {
+  PgAllowlistRepository,
+  PgHealthRepository,
+  PgInstrumentRepository,
+  type PgQueryable,
+} from '../../packages/persistence/src/index.js';
+
+
 const connectionString = process.env.DATABASE_URL?.trim();
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const schemaSql = await readFile(path.join(rootDir, 'db/baseline/schema.sql'), 'utf8');
@@ -542,5 +550,39 @@ integrationTest('rejects checksum mismatch before executing new SQL', async () =
       "SELECT COUNT(*)::int AS count FROM schema_migrations WHERE name = '001_backtest_runs.sql' AND checksum = repeat('0', 64)",
     );
     expect(Number(unchanged[0]?.count)).toBe(1);
+  });
+});
+
+
+integrationTest('PostgreSQL repositories read migrated instruments, allowlist, and readiness', async () => {
+  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+    await runMigrations(target, { plan });
+    const queryable: PgQueryable = {
+      query: async <Row = Record<string, unknown>>(sql: string, values: readonly unknown[] = []) => {
+        const schemaSql = sql.replaceAll('public.', '"' + targetSchema + '".');
+        const rows = await target.queryRows<Row & Record<string, unknown>>(schemaSql, values as readonly (string | number | boolean | null)[]);
+        return { rows, rowCount: rows.length };
+      },
+    };
+
+    const instruments = new PgInstrumentRepository(queryable);
+    const enabled = await instruments.listEnabled();
+    expect(enabled).toEqual([]);
+    expect(await instruments.findBySymbol('MISSING')).toBeNull();
+
+    await target.transaction([{
+      sql: 'INSERT INTO "' + targetSchema + '".allowed_emails (email) VALUES ($1)',
+      values: ['allowed@example.com'],
+    }]);
+    const allowlist = new PgAllowlistRepository(queryable);
+    await expect(allowlist.isAllowed(' ALLOWED@EXAMPLE.COM ')).resolves.toBe(true);
+    await expect(allowlist.isAllowed('denied@example.com')).resolves.toBe(false);
+    await expect(allowlist.isAllowed('  ')).resolves.toBe(false);
+
+    await expect(new PgHealthRepository(queryable).isDatabaseReady()).resolves.toBe(true);
+    const unavailable: PgQueryable = {
+      query: async () => { throw new Error('database unavailable'); },
+    };
+    await expect(new PgHealthRepository(unavailable).isDatabaseReady()).resolves.toBe(false);
   });
 });
