@@ -20,7 +20,7 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
     options.dependencies?.databaseReady ??
     createSupabaseReadinessProbe({
       url: config.SUPABASE_URL,
-      serviceRoleKey: config.SUPABASE_SERVICE_ROLE_KEY,
+      secretKey: config.SUPABASE_SECRET_KEY,
     });
 
   app.get("/health", async () =>
