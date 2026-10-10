@@ -45,11 +45,11 @@ function bearerToken(request: FastifyRequest): string | null {
   return match?.[1] ?? null;
 }
 
-export async function registerAuthPlugin(
+export function registerAuthPlugin(
   app: FastifyInstance,
   config: AuthPluginConfig,
   dependencies: AuthPluginDependencies,
-): Promise<void> {
+): void {
   app.decorateRequest("user", null);
 
   const baseUrl = config.supabaseUrl?.trim().replace(/\/+$/, "");
