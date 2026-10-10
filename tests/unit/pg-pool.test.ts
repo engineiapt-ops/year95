@@ -21,7 +21,7 @@ describe("createPgPool", () => {
     });
   });
   it("rejects invalid pool configuration", () => {
-    class FakePool { constructor(_options: PgPoolOptions) {} }
+    class FakePool { constructor(options: PgPoolOptions) { void options; } }
     const Pool = FakePool as unknown as new (options: PgPoolOptions) => PgPool;
     expect(() => createPgPool(Pool, { connectionString: " " })).toThrow(/connection string/);
     expect(() => createPgPool(Pool, { connectionString: "postgres://localhost/db", maxConnections: 21 })).toThrow(/maxConnections/);
