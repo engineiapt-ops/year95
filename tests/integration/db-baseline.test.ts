@@ -469,7 +469,7 @@ integrationTest('canonical baseline keeps database objects server-side when Supa
             'SET LOCAL ROLE "' + rolname + '";',
             'SELECT * FROM "' + targetSchema + '"."' + table_name + '" LIMIT 1;',
             'ROLLBACK;',
-          ].join('\\n')),
+          ].join('\n')),
           rolname + ' unexpectedly read table ' + table_name,
         ).toThrow(/permission denied for table/i);
       }
