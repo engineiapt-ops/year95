@@ -62,6 +62,9 @@ describe('forward-only migration metadata', () => {
     expect(plan.migrations[3]?.sql).toContain('CREATE TABLE IF NOT EXISTS allowed_emails');
     expect(plan.migrations[3]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
     expect(plan.allRecords.some((record) => record.name === '027_add_identity_repository_tables.sql')).toBe(true);
+    expect(plan.migrations[3]?.sql).toContain('CREATE TABLE IF NOT EXISTS allowed_emails');
+    expect(plan.migrations[3]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
+    expect(plan.allRecords.some((record) => record.name === '027_add_identity_repository_tables.sql')).toBe(true);
   });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
     const plan = await loadMigrationPlan(rootDir);
