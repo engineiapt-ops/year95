@@ -76,7 +76,11 @@ importers:
 
   packages/paper-trading: {}
 
-  packages/persistence: {}
+  packages/persistence:
+    dependencies:
+      '@year95/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/portfolio: {}
 

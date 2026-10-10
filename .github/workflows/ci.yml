@@ -158,6 +158,22 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Prepare Supabase client roles in disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://year95:year95@localhost:5432/year95_test
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $roles$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+              EXECUTE 'CREATE ROLE anon NOLOGIN';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+              EXECUTE 'CREATE ROLE authenticated NOLOGIN';
+            END IF;
+          END
+          $roles$;
+          SQL
       - name: Integration
         run: pnpm test:integration
       - name: Verify disposable database baseline

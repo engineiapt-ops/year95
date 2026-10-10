@@ -8,6 +8,14 @@ import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTablesAndIn
 import { loadMigrationPlan } from '../../tools/migration-files.mjs';
 import { PsqlDatabaseClient } from '../../tools/postgres-client.mjs';
 
+import {
+  PgAllowlistRepository,
+  PgHealthRepository,
+  PgInstrumentRepository,
+  type PgQueryable,
+} from '../../packages/persistence/src/index.js';
+
+
 const connectionString = process.env.DATABASE_URL?.trim();
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const schemaSql = await readFile(path.join(rootDir, 'db/baseline/schema.sql'), 'utf8');
@@ -109,7 +117,10 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
 
     await runMigrations(target, { plan, compareExistingSchema, legacySchemaBridge: bridge });
 
-    const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+    const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+      reference, target, referenceSchema, targetSchema,
+      ['allowed_emails', 'user_profiles'], [],
+    );
     expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
     const preservedData = await target.queryRows<{ count: number | string }>(
       'SELECT COUNT(*)::int AS count FROM market_data',
@@ -124,6 +135,7 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
       { name: '024_add_instruments.sql', origin: 'migration' },
       { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
       { name: '026_enable_rls_and_pin_audit_search_path.sql', origin: 'migration' },
+      { name: '027_add_identity_repository_tables.sql', origin: 'migration' },
     ]);
     expect(applied.map((row) => row.name)).toContain('schema.sql');
 
@@ -258,7 +270,7 @@ integrationTest('legacy bridge refuses unrelated schema drift before any bridge 
   });
 });
 
-integrationTest('migration 026 enables default-deny RLS on all public tables and pins immutable audit function search_path', async () => {
+integrationTest('migrations 026-027 enable default-deny RLS on all application tables and pin immutable audit function search_path', async () => {
   await withSchemas(async (_admin, target, _reference, targetSchema) => {
     await runMigrations(target, { plan });
 
@@ -272,6 +284,7 @@ integrationTest('migration 026 enables default-deny RLS on all public tables and
       [targetSchema],
     );
     expect(rls.map((row) => row.table_name)).toEqual([
+      'allowed_emails',
       'backtest_runs',
       'benchmark_results',
       'benchmark_runs',
@@ -291,6 +304,7 @@ integrationTest('migration 026 enables default-deny RLS on all public tables and
       'schema_migrations',
       'signals',
       'system_validation_snapshots',
+      'user_profiles',
       'walk_forward_folds',
       'walk_forward_portfolio_equity',
       'walk_forward_portfolio_folds',
@@ -415,6 +429,14 @@ integrationTest('canonical baseline keeps database objects server-side when Supa
     const roles = await target.queryRows<{ rolname: string }>(
       "SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated') ORDER BY rolname",
     );
+    expect(roles.map(({ rolname }) => rolname)).toEqual(['anon', 'authenticated']);
+
+    // Grant only schema usage so SELECT attempts reach PostgreSQL's table-level
+    // privilege check instead of failing earlier on schema access.
+    await target.transaction([{
+      sql: 'GRANT USAGE ON SCHEMA "' + targetSchema + '" TO anon, authenticated',
+    }]);
+
     for (const { rolname } of roles) {
       const tableGrants = await target.queryRows<{ table_name: string }>(
         [
@@ -429,6 +451,28 @@ integrationTest('canonical baseline keeps database objects server-side when Supa
         [rolname, targetSchema],
       );
       expect(tableGrants, rolname + ' has unexpected table privileges').toEqual([]);
+
+      const protectedTables = await target.queryRows<{ table_name: string }>(
+        [
+          'SELECT c.relname AS table_name FROM pg_class c',
+          'JOIN pg_namespace n ON n.oid = c.relnamespace',
+          "WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') ORDER BY c.relname",
+        ].join(' '),
+        [targetSchema],
+      );
+      expect(protectedTables.length).toBeGreaterThan(0);
+      for (const { table_name } of protectedTables) {
+        expect(
+          () => target.run([
+            'BEGIN;',
+            'SET LOCAL search_path TO "' + targetSchema + '", public;',
+            'SET LOCAL ROLE "' + rolname + '";',
+            'SELECT * FROM "' + targetSchema + '"."' + table_name + '" LIMIT 1;',
+            'ROLLBACK;',
+          ].join('\n')),
+          rolname + ' unexpectedly read table ' + table_name,
+        ).toThrow(/permission denied for table/i);
+      }
 
       const sequenceGrants = await target.queryRows<{ sequence_name: string }>(
         [
@@ -460,7 +504,10 @@ integrationTest('empty database baseline equals canonical schema.sql structure',
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction([{ sql: schemaSql }]);
     await runMigrations(target, { plan });
-    const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+    const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+      reference, target, referenceSchema, targetSchema,
+      ['allowed_emails', 'user_profiles'], [],
+    );
     expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
     const rows = await target.queryRows<{ name: string; origin: string }>(
       'SELECT name, origin FROM schema_migrations ORDER BY name',
@@ -533,5 +580,41 @@ integrationTest('rejects checksum mismatch before executing new SQL', async () =
       "SELECT COUNT(*)::int AS count FROM schema_migrations WHERE name = '001_backtest_runs.sql' AND checksum = repeat('0', 64)",
     );
     expect(Number(unchanged[0]?.count)).toBe(1);
+  });
+});
+
+
+integrationTest('PostgreSQL repositories read migrated instruments, allowlist, and readiness', async () => {
+  await withSchemas(async (_admin, target, _reference, targetSchema) => {
+    await runMigrations(target, { plan });
+    const queryable: PgQueryable = {
+      query: async <Row = Record<string, unknown>>(sql: string, values: readonly unknown[] = []) => {
+        const schemaSql = sql.replaceAll('public.', '"' + targetSchema + '".');
+        const rows = await target.queryRows<Row & Record<string, unknown>>(schemaSql, values as readonly (string | number | boolean | null)[]);
+        return { rows, rowCount: rows.length };
+      },
+    };
+
+    const instruments = new PgInstrumentRepository(queryable);
+    const enabled = await instruments.listEnabled();
+    expect(enabled).toHaveLength(1);
+    expect(enabled[0]).toMatchObject({ symbol: 'BTCUSDT', assetType: 'crypto_spot', displayName: 'Bitcoin / Tether' });
+    expect(await instruments.findBySymbol('BTCUSDT')).toMatchObject({ symbol: 'BTCUSDT', assetType: 'crypto_spot' });
+    expect(await instruments.findBySymbol('MISSING')).toBeNull();
+
+    await target.transaction([{
+      sql: 'INSERT INTO "' + targetSchema + '".allowed_emails (email) VALUES ($1)',
+      values: ['allowed@example.com'],
+    }]);
+    const allowlist = new PgAllowlistRepository(queryable);
+    await expect(allowlist.isAllowed(' ALLOWED@EXAMPLE.COM ')).resolves.toBe(true);
+    await expect(allowlist.isAllowed('denied@example.com')).resolves.toBe(false);
+    await expect(allowlist.isAllowed('  ')).resolves.toBe(false);
+
+    await expect(new PgHealthRepository(queryable).isDatabaseReady()).resolves.toBe(true);
+    const unavailable: PgQueryable = {
+      query: async () => { throw new Error('database unavailable'); },
+    };
+    await expect(new PgHealthRepository(unavailable).isDatabaseReady()).resolves.toBe(false);
   });
 });

@@ -37,3 +37,7 @@ No Vercel OIDC, AI Gateway, Vercel runtime dependency or Vercel cron.
 
 ## D10 — First milestone
 Login → API → Supabase → UI → BTCUSDT → market data → analysis → risk → paper signal.
+ 
+ 
+## D11 — PostgreSQL repositories 
+Repository contracts live in packages/contracts and PostgreSQL implementations live only in packages/persistence. Persistence maps legacy Portuguese column names to English domain fields. The database pool is configured through explicit dependency injection, uses TLS and bounded timeouts/connections, and transaction-mode compatible queries without named prepared statements. 

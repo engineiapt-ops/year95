@@ -5,9 +5,12 @@
   "type": "module",
   "files": ["dist"],
   "exports": { ".": "./dist/index.js" },
+  "dependencies": {
+    "@year95/contracts": "workspace:*"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
-    "migrate": "pnpm build && node ../../tools/db-migrate.mjs"
+    "migrate": "pnpm --filter @year95/contracts build && pnpm build && node ../../tools/db-migrate.mjs"
   }
 }
