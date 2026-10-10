@@ -72,4 +72,5 @@ export interface Clock {
 export const systemClock: Clock = Object.freeze({
   now: () => new Date(),
 });
-\nexport type { AllowlistRepository, HealthRepository, Instrument, InstrumentRepository } from "./repositories.js";\n
+
+export type { AllowlistRepository, HealthRepository, Instrument, InstrumentRepository } from "./repositories.js";
