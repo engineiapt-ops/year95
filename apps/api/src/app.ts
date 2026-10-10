@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { ApiConfig } from "@year95/config";
 import { healthResponseSchema, httpErrorResponseSchema, readyResponseSchema } from "@year95/contracts";
-import { createSupabaseAllowlistRepository, createSupabaseReadinessProbe } from "@year95/persistence";
+import { createSupabaseServerAccess } from "@year95/persistence";
 import { registerAuthPlugin } from "./plugins/auth.js";
 import { VERSION } from "./index.js";
 
@@ -18,17 +18,8 @@ export interface ApiAppOptions {
 export function createApiApp(options: ApiAppOptions): FastifyInstance {
   const { config } = options;
   const app = Fastify({ logger: { level: config.LOG_LEVEL } });
-  const databaseReady =
-    options.dependencies?.databaseReady ??
-    createSupabaseReadinessProbe({
-      url: config.SUPABASE_URL,
-      secretKey: config.SUPABASE_SECRET_KEY,
-    });
-
-  const allowlist = createSupabaseAllowlistRepository({
-    url: config.SUPABASE_URL,
-    secretKey: config.SUPABASE_SECRET_KEY,
-  });
+  const supabaseAccess = createSupabaseServerAccess(config);
+  const databaseReady = options.dependencies?.databaseReady ?? supabaseAccess.databaseReady;
   registerAuthPlugin(app, {
     supabaseUrl: config.SUPABASE_URL,
     issuer: config.SUPABASE_JWT_ISSUER,
@@ -36,7 +27,7 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
     clockToleranceSeconds: config.SUPABASE_JWT_CLOCK_TOLERANCE_SECONDS,
     jwksCacheMaxAgeMs: config.SUPABASE_JWKS_CACHE_MAX_AGE_MS,
   }, {
-    isEmailAllowed: options.dependencies?.isEmailAllowed ?? allowlist.isAllowed,
+    isEmailAllowed: options.dependencies?.isEmailAllowed ?? supabaseAccess.isEmailAllowed,
   });
 
   app.get("/health", async () =>
