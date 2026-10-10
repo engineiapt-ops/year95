@@ -1,7 +1,14 @@
+import { fileURLToPath } from 'node:url';
 import { defineWorkspace } from 'vitest/config';
+
+const unitAliases = {
+  '@year95/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
+  '@year95/persistence': fileURLToPath(new URL('./packages/persistence/src/supabase-readiness.ts', import.meta.url)),
+};
 
 export default defineWorkspace([
   {
+    resolve: { alias: unitAliases },
     test: {
       name: 'unit',
       include: ['tests/unit/**/*.test.ts'],
