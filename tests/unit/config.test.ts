@@ -44,18 +44,18 @@ describe("config", () => {
 
   it("never exposes secrets through JSON serialization", () => {
     const config = loadConfig("api", {
-      SUPABASE_SERVICE_ROLE_KEY: "super-secret",
+      SUPABASE_SECRET_KEY: "sb_secret_test",
       GEMINI_API_KEY: "gemini-secret",
       API_AUTH_TOKEN: "auth-secret",
       CRON_SECRET: "cron-secret",
     });
 
     const serialized = JSON.stringify(config);
-    expect(serialized).not.toContain("super-secret");
+    expect(serialized).not.toContain("sb_secret_test");
     expect(serialized).not.toContain("gemini-secret");
     expect(serialized).not.toContain("auth-secret");
     expect(serialized).not.toContain("cron-secret");
     expect(serialized).toContain("[REDACTED]");
-    expect(serializeConfig(config)).not.toContain("super-secret");
+    expect(serializeConfig(config)).not.toContain("sb_secret_test");
   });
 });
