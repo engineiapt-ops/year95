@@ -5,6 +5,9 @@
   "type": "module",
   "files": ["dist"],
   "exports": { ".": "./dist/index.js" },
+  "dependencies": {
+    "@year95/contracts": "workspace:*"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
