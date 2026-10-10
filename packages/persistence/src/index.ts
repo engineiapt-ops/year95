@@ -15,6 +15,8 @@ export { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables, sch
 export type { SchemaFingerprint, SchemaFingerprintComparison } from './schema-fingerprint.js';
 export { createSupabaseReadinessProbe } from './supabase-readiness.js';
 export type { ReadinessProbe, SupabaseReadinessConfig } from './supabase-readiness.js';
+export { createSupabaseAllowlistRepository } from './supabase-readiness.js';
+export type { SupabaseAllowlistConfig, SupabaseAllowlistRepository } from './supabase-readiness.js';
 
 export { createPgPool, withTransaction } from "./pg-pool.js";
 export type { PgClient, PgPool, PgPoolConfig, PgPoolConstructor, PgPoolOptions, PgQueryable, PgQueryResult } from "./pg-pool.js";
