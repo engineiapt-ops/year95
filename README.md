@@ -44,7 +44,7 @@ Build the API and its workspace dependencies with pnpm --filter @year95/api buil
 
 - GET /health is a liveness endpoint and does not require database credentials.
 - GET /ready performs a read-only Supabase REST check against public.instruments. It returns HTTP 503 when credentials are missing or the probe fails.
-- Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY only in the Render service environment. The service-role key is used only server-side for this minimal read-only readiness probe; never expose it through a VITE_ variable or the browser.
+- Configure SUPABASE_URL and SUPABASE_SECRET_KEY only in the Render service environment. The secret API key is sent only in the apikey header, as required by Supabase; never expose it through a VITE_ variable or the browser.
 - This runtime currently exposes health/readiness only. Authentication-protected application endpoints, user-scoped repositories and business workflows remain outside this PR.
 
 ## Configuration
