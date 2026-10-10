@@ -429,6 +429,14 @@ integrationTest('canonical baseline keeps database objects server-side when Supa
     const roles = await target.queryRows<{ rolname: string }>(
       "SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated') ORDER BY rolname",
     );
+    expect(roles.map(({ rolname }) => rolname)).toEqual(['anon', 'authenticated']);
+
+    // Grant only schema usage so SELECT attempts reach PostgreSQL's table-level
+    // privilege check instead of failing earlier on schema access.
+    await target.transaction([{
+      sql: 'GRANT USAGE ON SCHEMA "' + targetSchema + '" TO anon, authenticated',
+    }]);
+
     for (const { rolname } of roles) {
       const tableGrants = await target.queryRows<{ table_name: string }>(
         [
@@ -443,6 +451,28 @@ integrationTest('canonical baseline keeps database objects server-side when Supa
         [rolname, targetSchema],
       );
       expect(tableGrants, rolname + ' has unexpected table privileges').toEqual([]);
+
+      const protectedTables = await target.queryRows<{ table_name: string }>(
+        [
+          'SELECT c.relname AS table_name FROM pg_class c',
+          'JOIN pg_namespace n ON n.oid = c.relnamespace',
+          "WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') ORDER BY c.relname",
+        ].join(' '),
+        [targetSchema],
+      );
+      expect(protectedTables.length).toBeGreaterThan(0);
+      for (const { table_name } of protectedTables) {
+        expect(
+          () => target.run([
+            'BEGIN;',
+            'SET LOCAL search_path TO "' + targetSchema + '", public;',
+            'SET LOCAL ROLE "' + rolname + '";',
+            'SELECT * FROM "' + targetSchema + '"."' + table_name + '" LIMIT 1;',
+            'ROLLBACK;',
+          ].join('\\n')),
+          rolname + ' unexpectedly read table ' + table_name,
+        ).toThrow(/permission denied for table/i);
+      }
 
       const sequenceGrants = await target.queryRows<{ sequence_name: string }>(
         [
