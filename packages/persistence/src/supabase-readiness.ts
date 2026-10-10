@@ -97,3 +97,24 @@ export function createSupabaseAllowlistRepository(
     },
   };
 }
+
+export interface SupabaseServerConfig {
+  readonly SUPABASE_URL?: string | undefined;
+  readonly SUPABASE_SECRET_KEY?: string | undefined;
+}
+
+export interface SupabaseServerAccess {
+  readonly databaseReady: ReadinessProbe;
+  readonly isEmailAllowed: (email: string) => Promise<boolean>;
+}
+
+/** Compose server-only Supabase access without exposing credential names to the API layer. */
+export function createSupabaseServerAccess(config: SupabaseServerConfig): SupabaseServerAccess {
+  const credentials = { url: config.SUPABASE_URL, secretKey: config.SUPABASE_SECRET_KEY };
+  const readiness = createSupabaseReadinessProbe(credentials);
+  const allowlist = createSupabaseAllowlistRepository(credentials);
+  return {
+    databaseReady: readiness,
+    isEmailAllowed: (email) => allowlist.isAllowed(email),
+  };
+}
