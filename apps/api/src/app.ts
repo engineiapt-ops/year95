@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { ApiConfig } from "@year95/config";
-import { healthResponseSchema, readyResponseSchema } from "@year95/contracts";
+import { healthResponseSchema, httpErrorResponseSchema, readyResponseSchema } from "@year95/contracts";
 import { createSupabaseAllowlistRepository, createSupabaseReadinessProbe } from "@year95/persistence";
 import { registerAuthPlugin } from "./plugins/auth.js";
 import { VERSION } from "./index.js";
@@ -70,7 +70,7 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
 
   app.get("/v1/me", async (request, reply) => {
     if (!request.user) {
-      return reply.code(401).send({ error: { code: "UNAUTHORIZED", message: "Authentication required" } });
+      return reply.code(401).send(httpErrorResponseSchema.parse({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }));
     }
     return { id: request.user.id, email: request.user.email };
   });
