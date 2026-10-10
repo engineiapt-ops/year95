@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PsqlDatabaseClient } from './postgres-client.mjs';
 import { loadMigrationPlan } from './migration-files.mjs';
-import { compareSchemaFingerprintsIgnoringTables } from '../packages/persistence/dist/schema-fingerprint.js';
+import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables } from '../packages/persistence/dist/schema-fingerprint.js';
 import { runMigrations } from '../packages/persistence/dist/migrate.js';
 
 function assertLocalDisposableUrl(connectionString) {
