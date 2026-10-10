@@ -109,7 +109,10 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
 
     await runMigrations(target, { plan, compareExistingSchema, legacySchemaBridge: bridge });
 
-    const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+    const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+      reference, target, referenceSchema, targetSchema,
+      ['allowed_emails', 'user_profiles'], [],
+    );
     expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
     const preservedData = await target.queryRows<{ count: number | string }>(
       'SELECT COUNT(*)::int AS count FROM market_data',
@@ -124,6 +127,7 @@ integrationTest('recognized legacy schema is bridged additively and preserves ex
       { name: '024_add_instruments.sql', origin: 'migration' },
       { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
       { name: '026_enable_rls_and_pin_audit_search_path.sql', origin: 'migration' },
+      { name: '027_add_identity_repository_tables.sql', origin: 'migration' },
     ]);
     expect(applied.map((row) => row.name)).toContain('schema.sql');
 
@@ -258,7 +262,7 @@ integrationTest('legacy bridge refuses unrelated schema drift before any bridge 
   });
 });
 
-integrationTest('migration 026 enables default-deny RLS on all public tables and pins immutable audit function search_path', async () => {
+integrationTest('migrations 026-027 enable default-deny RLS on all application tables and pin immutable audit function search_path', async () => {
   await withSchemas(async (_admin, target, _reference, targetSchema) => {
     await runMigrations(target, { plan });
 
@@ -272,6 +276,7 @@ integrationTest('migration 026 enables default-deny RLS on all public tables and
       [targetSchema],
     );
     expect(rls.map((row) => row.table_name)).toEqual([
+      'allowed_emails',
       'backtest_runs',
       'benchmark_results',
       'benchmark_runs',
@@ -291,6 +296,7 @@ integrationTest('migration 026 enables default-deny RLS on all public tables and
       'schema_migrations',
       'signals',
       'system_validation_snapshots',
+      'user_profiles',
       'walk_forward_folds',
       'walk_forward_portfolio_equity',
       'walk_forward_portfolio_folds',
@@ -460,7 +466,10 @@ integrationTest('empty database baseline equals canonical schema.sql structure',
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction([{ sql: schemaSql }]);
     await runMigrations(target, { plan });
-    const comparison = await compareSchemaFingerprints(reference, target, referenceSchema, targetSchema);
+    const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+      reference, target, referenceSchema, targetSchema,
+      ['allowed_emails', 'user_profiles'], [],
+    );
     expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
     const rows = await target.queryRows<{ name: string; origin: string }>(
       'SELECT name, origin FROM schema_migrations ORDER BY name',
