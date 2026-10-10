@@ -1,7 +1,7 @@
 import {
   createRemoteJWKSet,
+  customFetch,
   jwtVerify,
-  type JWTVerifyGetKey,
 } from "jose";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { httpErrorResponseSchema } from "@year95/contracts";
@@ -59,14 +59,14 @@ export function registerAuthPlugin(
   const clockTolerance = config.clockToleranceSeconds ?? 5;
   const cacheMaxAge = config.jwksCacheMaxAgeMs ?? 300_000;
 
-  let getKey: JWTVerifyGetKey | undefined;
+  let getKey: ReturnType<typeof createRemoteJWKSet> | undefined;
   if (baseUrl && issuer) {
     const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", baseUrl);
     getKey = createRemoteJWKSet(jwksUrl, {
       cacheMaxAge,
       cooldownDuration: 30_000,
       timeoutDuration: 5_000,
-      ...(dependencies.fetcher ? { customFetch: dependencies.fetcher } : {}),
+      ...(dependencies.fetcher ? { [customFetch]: dependencies.fetcher } : {}),
     });
   }
 
