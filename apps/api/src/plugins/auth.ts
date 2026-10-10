@@ -4,6 +4,7 @@ import {
   type JWTVerifyGetKey,
 } from "jose";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { httpErrorResponseSchema } from "@year95/contracts";
 
 export interface AuthUser {
   readonly id: string;
@@ -35,7 +36,7 @@ function sendError(
   code: "UNAUTHORIZED" | "FORBIDDEN" | "SERVICE_UNAVAILABLE",
   message: string,
 ) {
-  return reply.code(statusCode).send({ error: { code, message } });
+  return reply.code(statusCode).send(httpErrorResponseSchema.parse({ error: { code, message } }));
 }
 
 function bearerToken(request: FastifyRequest): string | null {
@@ -69,8 +70,9 @@ export function registerAuthPlugin(
     });
   }
 
-  app.addHook("preHandler", async (request, reply) => {
-    if (!(request.url === "/v1" || request.url.startsWith("/v1/"))) return;
+  app.addHook("onRequest", async (request, reply) => {
+    const path = request.url.split("?")[0] ?? request.url;
+    if (path === "/health" || path === "/ready") return;
 
     const token = bearerToken(request);
     if (!token) {
