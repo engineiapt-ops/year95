@@ -93,7 +93,7 @@ export function createSupabaseAllowlistRepository(
       const payload: unknown = await response.json();
       return Array.isArray(payload) && payload.some(
         (row) => row !== null && typeof row === "object" &&
-          "email" in row && typeof row.email === "string",
+          "email" in row && row.email === email.trim().toLowerCase(),
       );
     },
   };
