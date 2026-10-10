@@ -9,7 +9,7 @@ export const PUBLIC_ENV_NAMES = [
 ] as const;
 
 export const SECRET_ENV_NAMES = [
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_SECRET_KEY",
   "GEMINI_API_KEY",
   "API_AUTH_TOKEN",
   "CRON_SECRET",
@@ -58,7 +58,7 @@ const quantitativeSchema = {
 export const apiConfigSchema = baseRuntimeSchema.extend({
   BINANCE_BASE_URL: urlText.default("https://api.binance.com"),
   SUPABASE_URL: urlText.optional(),
-  SUPABASE_SERVICE_ROLE_KEY: envText.optional(),
+  SUPABASE_SECRET_KEY: envText.optional(),
   GEMINI_API_KEY: envText.optional(),
   API_AUTH_TOKEN: envText.optional(),
   CRON_SECRET: envText.optional(),
@@ -68,7 +68,7 @@ export const apiConfigSchema = baseRuntimeSchema.extend({
 export const workerConfigSchema = baseRuntimeSchema.extend({
   BINANCE_BASE_URL: urlText.default("https://api.binance.com"),
   SUPABASE_URL: urlText.optional(),
-  SUPABASE_SERVICE_ROLE_KEY: envText.optional(),
+  SUPABASE_SECRET_KEY: envText.optional(),
   GEMINI_API_KEY: envText.optional(),
   ...quantitativeSchema,
 });
