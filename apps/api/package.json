@@ -14,7 +14,8 @@
     "@year95/config": "workspace:*",
     "@year95/contracts": "workspace:*",
     "@year95/persistence": "workspace:*",
-    "fastify": "5.12.5"
+    "fastify": "5.12.5",
+    "jose": "5.9.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"
