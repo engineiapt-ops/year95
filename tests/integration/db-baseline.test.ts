@@ -567,7 +567,9 @@ integrationTest('PostgreSQL repositories read migrated instruments, allowlist, a
 
     const instruments = new PgInstrumentRepository(queryable);
     const enabled = await instruments.listEnabled();
-    expect(enabled).toEqual([]);
+    expect(enabled).toHaveLength(1);
+    expect(enabled[0]).toMatchObject({ symbol: 'BTCUSDT', assetType: 'crypto_spot', displayName: 'Bitcoin / Tether' });
+    expect(await instruments.findBySymbol('BTCUSDT')).toMatchObject({ symbol: 'BTCUSDT', assetType: 'crypto_spot' });
     expect(await instruments.findBySymbol('MISSING')).toBeNull();
 
     await target.transaction([{
