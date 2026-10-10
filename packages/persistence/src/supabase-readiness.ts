@@ -81,7 +81,6 @@ export function createSupabaseAllowlistRepository(
         method: "GET",
         headers: {
           apikey: secretKey,
-          authorization: `Bearer ${secretKey}`,
           accept: "application/json",
         },
         redirect: "error",
