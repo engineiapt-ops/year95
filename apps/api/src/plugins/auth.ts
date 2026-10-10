@@ -1,6 +1,5 @@
 import {
   createRemoteJWKSet,
-  customFetch,
   jwtVerify,
 } from "jose";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -18,16 +17,16 @@ declare module "fastify" {
 }
 
 export interface AuthPluginConfig {
-  readonly supabaseUrl?: string;
-  readonly issuer?: string;
-  readonly audience?: string;
-  readonly clockToleranceSeconds?: number;
-  readonly jwksCacheMaxAgeMs?: number;
+  readonly supabaseUrl?: string | undefined;
+  readonly issuer?: string | undefined;
+  readonly audience?: string | undefined;
+  readonly clockToleranceSeconds?: number | undefined;
+  readonly jwksCacheMaxAgeMs?: number | undefined;
+  readonly jwksUrl?: string | undefined;
 }
 
 export interface AuthPluginDependencies {
   readonly isEmailAllowed: (email: string) => Promise<boolean>;
-  readonly fetcher?: typeof fetch;
 }
 
 function sendError(
@@ -61,12 +60,11 @@ export function registerAuthPlugin(
 
   let getKey: ReturnType<typeof createRemoteJWKSet> | undefined;
   if (baseUrl && issuer) {
-    const jwksUrl = new URL("/auth/v1/.well-known/jwks.json", baseUrl);
+    const jwksUrl = config.jwksUrl ? new URL(config.jwksUrl) : new URL("/auth/v1/.well-known/jwks.json", baseUrl);
     getKey = createRemoteJWKSet(jwksUrl, {
       cacheMaxAge,
       cooldownDuration: 30_000,
       timeoutDuration: 5_000,
-      ...(dependencies.fetcher ? { [customFetch]: dependencies.fetcher } : {}),
     });
   }
 
