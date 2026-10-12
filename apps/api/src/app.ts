@@ -20,6 +20,7 @@ export function createApiApp(options: ApiAppOptions): FastifyInstance {
   const app = Fastify({ logger: { level: config.LOG_LEVEL } });
   const supabaseAccess = createSupabaseServerAccess(config);
   const databaseReady = options.dependencies?.databaseReady ?? supabaseAccess.databaseReady;
+
   registerAuthPlugin(app, {
     supabaseUrl: config.SUPABASE_URL,
     issuer: config.SUPABASE_JWT_ISSUER,

@@ -10,9 +10,12 @@ const apps: ReturnType<typeof Fastify>[] = [];
 const servers: Server[] = [];
 
 async function setup(options: {
-  readonly allowlisted?: boolean;
+  readonly allowlisted?: boolean | 'fail';
   readonly issuer?: string;
   readonly tokenIssuer?: string;
+  readonly tokenAudience?: string;
+  readonly tokenEmail?: string;
+  readonly omitSub?: boolean;
   readonly expired?: boolean;
   readonly wrongSignature?: boolean;
   readonly captureLogs?: (chunk: string) => void;
@@ -55,7 +58,10 @@ async function setup(options: {
     clockToleranceSeconds: 0,
     jwksCacheMaxAgeMs: 60_000,
   }, {
-    isEmailAllowed: async () => options.allowlisted ?? true,
+    isEmailAllowed: async () => {
+      if (options.allowlisted === 'fail') throw new Error('Database connection failed');
+      return options.allowlisted === undefined ? true : (options.allowlisted === true);
+    },
   });
 
   app.get("/health", async () => ({ status: "ok" }));
@@ -63,12 +69,16 @@ async function setup(options: {
   app.get("/v1/me", async (request) => ({ id: request.user?.id, email: request.user?.email }));
 
   const signer = options.wrongSignature ? otherPair!.privateKey : privateKey;
-  let tokenBuilder = new SignJWT({ email: "user@example.com" })
+  let tokenBuilder = new SignJWT({ email: options.tokenEmail !== undefined ? options.tokenEmail : "user@example.com" })
     .setProtectedHeader({ alg: "RS256", kid: "test-key" })
-    .setSubject("user-123")
     .setIssuer(options.tokenIssuer ?? "https://example.supabase.co/auth/v1")
-    .setAudience("authenticated")
+    .setAudience(options.tokenAudience ?? "authenticated")
     .setIssuedAt();
+
+  if (!options.omitSub) {
+    tokenBuilder = tokenBuilder.setSubject("user-123");
+  }
+
   if (options.expired) tokenBuilder = tokenBuilder.setExpirationTime(Math.floor(Date.now() / 1000) - 30);
   else tokenBuilder = tokenBuilder.setExpirationTime(Math.floor(Date.now() / 1000) + 300);
   const token = await tokenBuilder.sign(signer);
@@ -131,5 +141,30 @@ describe("Supabase JWT authentication contract", () => {
     const { app, token } = await setup({ expired: true, captureLogs: (chunk) => { logs += chunk; } });
     await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${token}` } });
     expect(logs).not.toContain(token);
+  });
+
+  it("fails closed with 503 if the allowlist query fails", async () => {
+    const { app, token } = await setup({ allowlisted: 'fail' });
+    const response = await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: { code: "SERVICE_UNAVAILABLE" } });
+  });
+
+  it("rejects tokens with missing sub claims", async () => {
+    const { app, token } = await setup({ omitSub: true });
+    const response = await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("rejects tokens with missing email claims", async () => {
+    const { app, token } = await setup({ tokenEmail: "" });
+    const response = await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("rejects tokens with an incorrect audience", async () => {
+    const { app, token } = await setup({ tokenAudience: "public" });
+    const response = await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(401);
   });
 });
