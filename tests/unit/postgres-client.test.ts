@@ -1,6 +1,85 @@
 import { describe, it, expect } from 'vitest';
 import { applyParameters } from '../../tools/postgres-client.mjs';
 
+
+import { vi } from 'vitest';
+import * as child_process from 'node:child_process';
+import { PsqlDatabaseClient } from '../../tools/postgres-client.mjs';
+
+vi.mock('node:child_process', () => ({
+  spawnSync: vi.fn(() => ({ status: 0, stdout: 'mocked output' })),
+}));
+
+describe('PsqlDatabaseClient', () => {
+  it('should pass standard_conforming_strings=on via PGOPTIONS', () => {
+    const client = new PsqlDatabaseClient({ connectionString: 'postgres://dummy' });
+    const originalEnv = process.env.PGOPTIONS;
+    process.env.PGOPTIONS = '-c some_other_option=on';
+
+    client.run('SELECT 1');
+
+    expect(child_process.spawnSync).toHaveBeenCalledWith(
+      'psql',
+      expect.anything(),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PGOPTIONS: '-c some_other_option=on -c standard_conforming_strings=on'
+        })
+      })
+    );
+
+    process.env.PGOPTIONS = originalEnv;
+  });
+
+  it('should override previous standard_conforming_strings=off settings', () => {
+    const client = new PsqlDatabaseClient({ connectionString: 'postgres://dummy' });
+    const originalEnv = process.env.PGOPTIONS;
+    process.env.PGOPTIONS = '-c standard_conforming_strings=off';
+
+    client.run('SELECT 1');
+
+    expect(child_process.spawnSync).toHaveBeenCalledWith(
+      'psql',
+      expect.anything(),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PGOPTIONS: '-c standard_conforming_strings=off -c standard_conforming_strings=on'
+        })
+      })
+    );
+
+    process.env.PGOPTIONS = originalEnv;
+  });
+
+  it('should set standard_conforming_strings=on if PGOPTIONS is unset', () => {
+    const client = new PsqlDatabaseClient({ connectionString: 'postgres://dummy' });
+    const originalEnv = process.env.PGOPTIONS;
+    delete process.env.PGOPTIONS;
+
+    client.run('SELECT 1');
+
+    expect(child_process.spawnSync).toHaveBeenCalledWith(
+      'psql',
+      expect.anything(),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          PGOPTIONS: '-c standard_conforming_strings=on'
+        })
+      })
+    );
+
+    process.env.PGOPTIONS = originalEnv;
+  });
+
+  it('should correctly escape backslashes and single quotes', () => {
+    const sql = "SELECT $1";
+    const values = [`text with \\ and ' quote`];
+    const result = applyParameters(sql, values);
+    expect(result).toBe(`SELECT 'text with \\ and '' quote'`);
+  });
+});
+
+
 describe('applyParameters', () => {
   it('should preserve $1 when replacing $2', () => {
     const sql = "SELECT $2";
