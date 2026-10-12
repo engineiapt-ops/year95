@@ -98,4 +98,25 @@ describe('applyParameters', () => {
     const result = applyParameters(sql, values);
     expect(result).toBe("SELECT 1, 10");
   });
+
+  it('should format false as FALSE', () => {
+    const sql = "SELECT $1";
+    const values = [false];
+    const result = applyParameters(sql, values);
+    expect(result).toBe("SELECT FALSE");
+  });
+
+  it('should preserve finite decimal numbers', () => {
+    const sql = "SELECT $1";
+    const values = [3.14159];
+    const result = applyParameters(sql, values);
+    expect(result).toBe("SELECT 3.14159");
+  });
+
+  it('should reject Infinity, -Infinity, and NaN', () => {
+    const sql = "SELECT $1";
+    expect(() => applyParameters(sql, [Infinity])).toThrowError(/finite numbers/);
+    expect(() => applyParameters(sql, [-Infinity])).toThrowError(/finite numbers/);
+    expect(() => applyParameters(sql, [NaN])).toThrowError(/finite numbers/);
+  });
 });
