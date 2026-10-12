@@ -3,7 +3,9 @@ import { defineWorkspace } from 'vitest/config';
 
 const unitAliases = {
   '@year95/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
-  '@year95/persistence': fileURLToPath(new URL('./packages/persistence/src/supabase-readiness.ts', import.meta.url)),
+  '@year95/persistence': fileURLToPath(
+    new URL('./packages/persistence/src/index.ts', import.meta.url),
+  ),
 };
 
 export default defineWorkspace([
@@ -16,7 +18,13 @@ export default defineWorkspace([
     },
   },
   {
-    resolve: { alias: { '@year95/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)) } },
+    resolve: {
+      alias: {
+        '@year95/contracts': fileURLToPath(
+          new URL('./packages/contracts/src/index.ts', import.meta.url),
+        ),
+      },
+    },
     test: {
       name: 'contract',
       include: ['tests/contract/**/*.test.ts', 'apps/api/tests/**/*.test.ts'],
@@ -24,6 +32,17 @@ export default defineWorkspace([
     },
   },
   {
+    resolve: {
+      alias: {
+        '@year95/config': fileURLToPath(new URL('./packages/config/src/index.ts', import.meta.url)),
+        '@year95/contracts': fileURLToPath(
+          new URL('./packages/contracts/src/index.ts', import.meta.url),
+        ),
+        '@year95/persistence': fileURLToPath(
+          new URL('./packages/persistence/src/index.ts', import.meta.url),
+        ),
+      },
+    },
     test: {
       name: 'integration',
       include: ['tests/integration/**/*.test.ts'],

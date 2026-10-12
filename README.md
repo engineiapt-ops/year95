@@ -43,8 +43,8 @@ YEAR95 is a pnpm monorepo targeting Node 22 with TypeScript strict mode. Domain 
 Build the API and its workspace dependencies with pnpm --filter @year95/api build, then run it with pnpm --filter @year95/api start.
 
 - GET /health is a liveness endpoint and does not require database credentials.
-- GET /ready performs a read-only Supabase REST check against public.instruments. It returns HTTP 503 when credentials are missing or the probe fails.
-- Configure SUPABASE_URL and SUPABASE_SECRET_KEY only in the Render service environment. The secret API key is sent only in the apikey header, as required by Supabase; never expose it through a VITE_ variable or the browser.
+- GET /ready performs a PostgreSQL `SELECT 1` through the shared connection pool and returns HTTP 503 when the database is missing or the check fails.
+- Configure `DATABASE_URL` only in the server environment. Connections verify the TLS certificate by default. When using the Supabase pooler, follow [docs/DEPLOY-DB.md](docs/DEPLOY-DB.md) to configure the Supabase CA. `/health` remains independent of database readiness.
 - This runtime currently exposes health/readiness only. Authentication-protected application endpoints, user-scoped repositories and business workflows remain outside this PR.
 
 ## Configuration
