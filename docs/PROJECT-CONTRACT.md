@@ -2,7 +2,7 @@
 
 ## 1. Product vision
 
-YEAR95 — AI Financial Intelligence is a multi-user financial intelligence platform for deterministic market analysis and paper-trading decisions.
+YEAR95 — AI Financial Intelligence is a multiuser financial intelligence platform with closed registration (allowlist) for deterministic market analysis and paper-trading decisions.
 
 The quantitative decision path is authoritative. AI can add explanation, research context and advisory narrative, but it can never change the quantitative decision, risk controls or execution permission.
 
@@ -13,6 +13,7 @@ The quantitative decision path is authoritative. AI can add explanation, researc
 YEAR95 is paper-trading only.
 
 The platform must not:
+
 - place real orders;
 - route orders to live brokers or exchanges;
 - promote a paper strategy to live automatically;
@@ -23,6 +24,7 @@ The platform must not:
 The deterministic quantitative decision is authoritative.
 
 AI is consultative only and must not:
+
 - change side;
 - change thresholds;
 - change position sizing;
@@ -40,6 +42,7 @@ A failure in an advisory component must never convert an invalid quantitative st
 Risk per trade must be no greater than 1% of equity.
 
 The mandatory domain names are:
+
 - `riskPerTradePct`
 - `stopDistancePct`
 - `positionNotionalPct`
@@ -91,6 +94,7 @@ YEAR95 has no runtime dependency on Vercel.
 Vercel OIDC, AI Gateway, Vercel runtime features and Vercel cron are not architectural requirements.
 
 The intended deployment boundaries are:
+
 - API: Render
 - web: Cloudflare Pages
 
@@ -101,6 +105,7 @@ Supabase PostgreSQL is preserved.
 The database baseline `001–023` is immutable.
 
 Future migrations `024+` are forward-only and additive. They must not use:
+
 - `DROP`
 - `TRUNCATE`
 - `RENAME`
@@ -126,6 +131,7 @@ Application code must use `loadConfig(env)` or an equivalent explicit configurat
 ## 3. Initial scope
 
 The first product milestones cover:
+
 1. authentication;
 2. API and web shells;
 3. BTCUSDT market data;
@@ -140,6 +146,7 @@ The first market-data source is public Binance market data. Provider-specific co
 ## 4. Prohibitions
 
 The following are explicitly outside the product contract:
+
 - real-money order execution;
 - live order routing;
 - automatic paper-to-live promotion;
@@ -157,6 +164,7 @@ The following are explicitly outside the product contract:
 The legacy `ai-financial-analyst` repository is a behavioral and schema reference.
 
 Legacy source is consulted to extract:
+
 - contracts;
 - invariants;
 - golden values;
@@ -168,6 +176,7 @@ Legacy implementation is not copied as a bulk migration source.
 ## 6. Governance
 
 Every implementation PR must:
+
 - state its exact scope;
 - preserve these invariants unless a behavior change is explicitly approved;
 - add or update the relevant ADR when a material architecture decision is made;
