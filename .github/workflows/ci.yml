@@ -66,8 +66,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Lint
-        run: pnpm lint
+      - name: Build then lint on a clean checkout
+        run: pnpm build && pnpm lint
+      - name: Format check
+        run: pnpm format:check
       - name: Check forward-only migrations
         run: pnpm check:migrations
 
@@ -87,7 +89,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Architecture
-        run: pnpm dlx dependency-cruiser@18.4.0 --config .dependency-cruiser.cjs --ts-config tsconfig.base.json apps packages
+        run: pnpm arch
+      - name: Verify architecture policy
+        run: pnpm verify:arch
 
   unit:
     name: unit
