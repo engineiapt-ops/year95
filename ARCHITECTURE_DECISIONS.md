@@ -41,3 +41,6 @@ Login → API → Supabase → UI → BTCUSDT → market data → analysis → r
  
 ## D11 — PostgreSQL repositories 
 Repository contracts live in packages/contracts and PostgreSQL implementations live only in packages/persistence. Persistence maps legacy Portuguese column names to English domain fields. The database pool is configured through explicit dependency injection, uses TLS and bounded timeouts/connections, and transaction-mode compatible queries without named prepared statements. 
+
+## D12 — Supabase JWT authentication
+The API validates Supabase access tokens using jose and the project's remote JWKS, with cached keys, explicit issuer/audience validation, and bounded clock tolerance. Every route is protected by default except `/health` and `/ready`. The verified subject and email are attached to the request only after the server-side email allowlist approves the identity. Missing/invalid credentials return the contracts-standard 401, allowlist denial returns 403, and allowlist infrastructure failure fails closed with 503. Static API auth tokens are not supported.

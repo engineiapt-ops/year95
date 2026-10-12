@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "files": ["dist"],
-  "exports": { ".": "./dist/index.js" },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "typecheck": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json --noEmit",
     "build": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json",
@@ -14,7 +18,8 @@
     "@year95/config": "workspace:*",
     "@year95/contracts": "workspace:*",
     "@year95/persistence": "workspace:*",
-    "fastify": "5.12.5"
+    "fastify": "5.12.5",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"

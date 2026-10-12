@@ -11,7 +11,6 @@ export const PUBLIC_ENV_NAMES = [
 export const SECRET_ENV_NAMES = [
   "SUPABASE_SECRET_KEY",
   "GEMINI_API_KEY",
-  "API_AUTH_TOKEN",
   "CRON_SECRET",
   "IG_API_KEY",
   "IG_USERNAME",
@@ -59,8 +58,11 @@ export const apiConfigSchema = baseRuntimeSchema.extend({
   BINANCE_BASE_URL: urlText.default("https://api.binance.com"),
   SUPABASE_URL: urlText.optional(),
   SUPABASE_SECRET_KEY: envText.optional(),
+  SUPABASE_JWT_ISSUER: urlText.optional(),
+  SUPABASE_JWT_AUDIENCE: envText.default("authenticated"),
+  SUPABASE_JWT_CLOCK_TOLERANCE_SECONDS: z.coerce.number().int().min(0).max(60).default(5),
+  SUPABASE_JWKS_CACHE_MAX_AGE_MS: z.coerce.number().int().min(1000).max(3600000).default(300000),
   GEMINI_API_KEY: envText.optional(),
-  API_AUTH_TOKEN: envText.optional(),
   CRON_SECRET: envText.optional(),
   ...quantitativeSchema,
 });
