@@ -14,61 +14,73 @@ describe('PsqlDatabaseClient', () => {
   it('should pass standard_conforming_strings=on via PGOPTIONS', () => {
     const client = new PsqlDatabaseClient({ connectionString: 'postgres://dummy' });
     const originalEnv = process.env.PGOPTIONS;
-    process.env.PGOPTIONS = '-c some_other_option=on';
-
-    client.run('SELECT 1');
-
-    expect(child_process.spawnSync).toHaveBeenCalledWith(
-      'psql',
-      expect.anything(),
-      expect.objectContaining({
-        env: expect.objectContaining({
-          PGOPTIONS: '-c some_other_option=on -c standard_conforming_strings=on'
+    try {
+      process.env.PGOPTIONS = '-c some_other_option=on';
+      client.run('SELECT 1');
+      expect(child_process.spawnSync).toHaveBeenCalledWith(
+        'psql',
+        expect.anything(),
+        expect.objectContaining({
+          env: expect.objectContaining({
+            PGOPTIONS: '-c some_other_option=on -c standard_conforming_strings=on'
+          })
         })
-      })
-    );
-
-    process.env.PGOPTIONS = originalEnv;
+      );
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.PGOPTIONS;
+      } else {
+        process.env.PGOPTIONS = originalEnv;
+      }
+    }
   });
 
   it('should override previous standard_conforming_strings=off settings', () => {
     const client = new PsqlDatabaseClient({ connectionString: 'postgres://dummy' });
     const originalEnv = process.env.PGOPTIONS;
-    process.env.PGOPTIONS = '-c standard_conforming_strings=off';
-
-    client.run('SELECT 1');
-
-    expect(child_process.spawnSync).toHaveBeenCalledWith(
-      'psql',
-      expect.anything(),
-      expect.objectContaining({
-        env: expect.objectContaining({
-          PGOPTIONS: '-c standard_conforming_strings=off -c standard_conforming_strings=on'
+    try {
+      process.env.PGOPTIONS = '-c standard_conforming_strings=off';
+      client.run('SELECT 1');
+      expect(child_process.spawnSync).toHaveBeenCalledWith(
+        'psql',
+        expect.anything(),
+        expect.objectContaining({
+          env: expect.objectContaining({
+            PGOPTIONS: '-c standard_conforming_strings=off -c standard_conforming_strings=on'
+          })
         })
-      })
-    );
-
-    process.env.PGOPTIONS = originalEnv;
+      );
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.PGOPTIONS;
+      } else {
+        process.env.PGOPTIONS = originalEnv;
+      }
+    }
   });
 
   it('should set standard_conforming_strings=on if PGOPTIONS is unset', () => {
     const client = new PsqlDatabaseClient({ connectionString: 'postgres://dummy' });
     const originalEnv = process.env.PGOPTIONS;
-    delete process.env.PGOPTIONS;
-
-    client.run('SELECT 1');
-
-    expect(child_process.spawnSync).toHaveBeenCalledWith(
-      'psql',
-      expect.anything(),
-      expect.objectContaining({
-        env: expect.objectContaining({
-          PGOPTIONS: '-c standard_conforming_strings=on'
+    try {
+      delete process.env.PGOPTIONS;
+      client.run('SELECT 1');
+      expect(child_process.spawnSync).toHaveBeenCalledWith(
+        'psql',
+        expect.anything(),
+        expect.objectContaining({
+          env: expect.objectContaining({
+            PGOPTIONS: '-c standard_conforming_strings=on'
+          })
         })
-      })
-    );
-
-    process.env.PGOPTIONS = originalEnv;
+      );
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.PGOPTIONS;
+      } else {
+        process.env.PGOPTIONS = originalEnv;
+      }
+    }
   });
 
   it('should correctly escape backslashes and single quotes', () => {
