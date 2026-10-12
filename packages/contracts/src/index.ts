@@ -32,6 +32,25 @@ export const HTTP_STATUS_BY_ERROR: Readonly<Record<HttpErrorCode, number>> = {
   SERVICE_UNAVAILABLE: 503,
 };
 
+export const httpErrorResponseSchema = z.object({
+  error: z.object({
+    code: z.enum([
+      "BAD_REQUEST",
+      "UNAUTHORIZED",
+      "FORBIDDEN",
+      "NOT_FOUND",
+      "CONFLICT",
+      "UNPROCESSABLE_ENTITY",
+      "TOO_MANY_REQUESTS",
+      "INTERNAL_ERROR",
+      "SERVICE_UNAVAILABLE",
+    ]),
+    message: z.string().min(1),
+  }),
+});
+
+export type HttpErrorResponse = z.infer<typeof httpErrorResponseSchema>;
+
 export class DomainError extends Error {
   readonly code: HttpErrorCode;
   readonly details: Readonly<Record<string, unknown>> | undefined;
@@ -72,3 +91,5 @@ export interface Clock {
 export const systemClock: Clock = Object.freeze({
   now: () => new Date(),
 });
+
+export type { AllowlistRepository, HealthRepository, Instrument, InstrumentRepository } from "./repositories.js";

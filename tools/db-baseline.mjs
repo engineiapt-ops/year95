@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PsqlDatabaseClient } from './postgres-client.mjs';
 import { loadMigrationPlan } from './migration-files.mjs';
-import { compareSchemaFingerprints } from '../packages/persistence/dist/schema-fingerprint.js';
+import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables } from '../packages/persistence/dist/schema-fingerprint.js';
 import { runMigrations } from '../packages/persistence/dist/migrate.js';
 
 function assertLocalDisposableUrl(connectionString) {
@@ -47,8 +47,9 @@ async function main() {
   try {
     await reference.transaction([{ sql: plan.baselineSchemaSql }]);
     await runMigrations(baseline, { plan });
-    const localComparison = await compareSchemaFingerprints(
+    const localComparison = await compareSchemaFingerprintsIgnoringTables(
       referenceReadOnly, baselineReadOnly, referenceSchema, baselineSchema,
+      ['allowed_emails', 'user_profiles'],
     );
     const tables = await referenceReadOnly.queryRows(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name",

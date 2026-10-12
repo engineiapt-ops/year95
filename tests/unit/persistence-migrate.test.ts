@@ -41,12 +41,13 @@ describe('forward-only migration metadata', () => {
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
   });
-  test('loads additive migrations 024-025 with migration origin', async () => {
+  test('loads additive migrations 024-027 with migration origin', async () => {
     const plan = await loadMigrationPlan(rootDir);
     expect(plan.migrations.map(({ record }) => record.name)).toEqual([
       '024_add_instruments.sql',
       '025_add_decision_log_paper_idempotency.sql',
       '026_enable_rls_and_pin_audit_search_path.sql',
+      '027_add_identity_repository_tables.sql',
     ]);
     expect(plan.migrations[0]?.record.origin).toBe('migration');
     expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
@@ -58,6 +59,9 @@ describe('forward-only migration metadata', () => {
     expect(plan.migrations[2]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
     expect(plan.migrations[2]?.sql).toContain('SET search_path = pg_catalog');
     expect(plan.allRecords.some((record) => record.name === '026_enable_rls_and_pin_audit_search_path.sql')).toBe(true);
+    expect(plan.migrations[3]?.sql).toContain('CREATE TABLE IF NOT EXISTS allowed_emails');
+    expect(plan.migrations[3]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
+    expect(plan.allRecords.some((record) => record.name === '027_add_identity_repository_tables.sql')).toBe(true);
   });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
     const plan = await loadMigrationPlan(rootDir);
