@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PsqlDatabaseClient } from './postgres-client.mjs';
 import { loadMigrationPlan } from './migration-files.mjs';
-import { compareSchemaFingerprints, compareSchemaFingerprintsIgnoringTables } from '../packages/persistence/dist/schema-fingerprint.js';
+import {
+  compareSchemaFingerprints,
+  compareSchemaFingerprintsIgnoringTables,
+} from '../packages/persistence/dist/schema-fingerprint.js';
 import { runMigrations } from '../packages/persistence/dist/migrate.js';
 
 function assertLocalDisposableUrl(connectionString) {
@@ -11,19 +14,26 @@ function assertLocalDisposableUrl(connectionString) {
   try {
     databaseUrl = new URL(connectionString);
   } catch {
-    throw new Error('DATABASE_URL must be a PostgreSQL URL pointing to a local disposable instance');
+    throw new Error(
+      'DATABASE_URL must be a PostgreSQL URL pointing to a local disposable instance',
+    );
   }
   if (!['localhost', '127.0.0.1', '[::1]', '::1'].includes(databaseUrl.hostname)) {
-    throw new Error('Refusing database baseline DDL for non-loopback host: ' + databaseUrl.hostname);
+    throw new Error(
+      'Refusing database baseline DDL for non-loopback host: ' + databaseUrl.hostname,
+    );
   }
 }
 
 async function main() {
   if (process.env.DB_BASELINE_DISPOSABLE !== '1') {
-    throw new Error('Refusing to run: set DB_BASELINE_DISPOSABLE=1 only for a disposable local PostgreSQL database');
+    throw new Error(
+      'Refusing to run: set DB_BASELINE_DISPOSABLE=1 only for a disposable local PostgreSQL database',
+    );
   }
   const connectionString = process.env.DATABASE_URL?.trim();
-  if (!connectionString) throw new Error('DATABASE_URL must point to a disposable local PostgreSQL database');
+  if (!connectionString)
+    throw new Error('DATABASE_URL must point to a disposable local PostgreSQL database');
   assertLocalDisposableUrl(connectionString);
 
   const rootDir = fileURLToPath(new URL('..', import.meta.url));
@@ -39,16 +49,23 @@ async function main() {
   const baseline = new PsqlDatabaseClient({ connectionString, schemaName: baselineSchema });
   const reference = new PsqlDatabaseClient({ connectionString, schemaName: referenceSchema });
   const baselineReadOnly = new PsqlDatabaseClient({
-    connectionString, schemaName: baselineSchema, readOnly: true,
+    connectionString,
+    schemaName: baselineSchema,
+    readOnly: true,
   });
   const referenceReadOnly = new PsqlDatabaseClient({
-    connectionString, schemaName: referenceSchema, readOnly: true,
+    connectionString,
+    schemaName: referenceSchema,
+    readOnly: true,
   });
   try {
     await reference.transaction([{ sql: plan.baselineSchemaSql }]);
     await runMigrations(baseline, { plan });
     const localComparison = await compareSchemaFingerprintsIgnoringTables(
-      referenceReadOnly, baselineReadOnly, referenceSchema, baselineSchema,
+      referenceReadOnly,
+      baselineReadOnly,
+      referenceSchema,
+      baselineSchema,
       ['allowed_emails', 'user_profiles'],
     );
     const tables = await referenceReadOnly.queryRows(
@@ -57,24 +74,40 @@ async function main() {
     );
     const report = {
       source: 'db/baseline/schema.sql',
-      schemaSqlSha256: plan.baselineRecords.find((record) => record.name === 'schema.sql')?.checksum,
+      schemaSqlSha256: plan.baselineRecords.find((record) => record.name === 'schema.sql')
+        ?.checksum,
       baselineMigrationCount: plan.baselineRecords.length - 1,
-      migrationChecksums: plan.baselineRecords.map(({ name, checksum, origin }) => ({ name, checksum, origin })),
-      schemaSummary: { tables: tables.length, indexesAndConstraintsVerifiedBy: 'schemaFingerprint' },
+      migrationChecksums: plan.baselineRecords.map(({ name, checksum, origin }) => ({
+        name,
+        checksum,
+        origin,
+      })),
+      schemaSummary: {
+        tables: tables.length,
+        indexesAndConstraintsVerifiedBy: 'schemaFingerprint',
+      },
       localComparison: localComparison.equivalent
         ? 'PASS — empty-database runner matches canonical schema.sql'
         : 'DIVERGENCE — ' + localComparison.differences.join(', '),
       localDifferences: localComparison.differences,
-      liveComparison: 'not requested',
+      liveComparison:
+        'PENDING — SUPABASE_READONLY_DATABASE_URL not supplied; live comparison not run (2026-10-13)',
     };
     if (!localComparison.equivalent) process.exitCode = 2;
 
     const readOnlyUrl = process.env.SUPABASE_READONLY_DATABASE_URL?.trim();
     if (readOnlyUrl) {
       const live = new PsqlDatabaseClient({
-        connectionString: readOnlyUrl, schemaName: 'public', readOnly: true,
+        connectionString: readOnlyUrl,
+        schemaName: 'public',
+        readOnly: true,
       });
-      const comparison = await compareSchemaFingerprints(referenceReadOnly, live, referenceSchema, 'public');
+      const comparison = await compareSchemaFingerprints(
+        referenceReadOnly,
+        live,
+        referenceSchema,
+        'public',
+      );
       report.liveComparison = comparison.equivalent
         ? 'PASS — exact structural match (read-only)'
         : 'DIVERGENCE — ' + comparison.differences.join(', ');
