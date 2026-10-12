@@ -12,6 +12,7 @@ YEAR95 must establish unambiguous domain terminology before implementation begin
 ## Decision
 
 The mandatory domain names are:
+
 - `riskPerTradePct`
 - `stopDistancePct`
 - `positionNotionalPct`
@@ -19,6 +20,7 @@ The mandatory domain names are:
 The hard maximum `riskPerTradePct` is 1%.
 
 The baseline policy is:
+
 - `riskPerTradePct`: 0.5% default;
 - `positionNotionalPct`: 1.5% baseline;
 - minimum risk/reward: 1:2.

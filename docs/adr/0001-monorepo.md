@@ -14,6 +14,7 @@ The project contract requires pnpm, Node 22 and TypeScript strict mode.
 YEAR95 uses a pnpm monorepo with clear application/package boundaries. Domain code remains independent from infrastructure.
 
 The repository structure is organized around:
+
 - `apps/` for deployable applications;
 - `packages/` for reusable domain, application and infrastructure contracts.
 

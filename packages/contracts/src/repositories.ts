@@ -1,13 +1,13 @@
 export interface Instrument {
   readonly symbol: string;
   readonly displayName: string;
-  readonly assetType: "crypto_spot" | "cfd";
-  readonly venue: "binance_spot" | "saxo" | "ig" | "xtb";
+  readonly assetType: 'crypto_spot' | 'cfd';
+  readonly venue: 'binance_spot' | 'saxo' | 'ig' | 'xtb';
   readonly baseCurrency: string;
   readonly quoteCurrency: string;
   readonly enabled: boolean;
   readonly dataProvider: string;
-  readonly metadataStatus: "verified" | "pending_broker_confirmation";
+  readonly metadataStatus: 'verified' | 'pending_broker_confirmation';
   readonly metadataSource: string;
   readonly minOrderSize: string | null;
   readonly maxOrderSize: string | null;

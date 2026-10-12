@@ -1,19 +1,47 @@
-import js from "@eslint/js";
-import tseslint from "typescript-eslint";
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+const forbiddenIdentifiers = [
+  {
+    selector: "Identifier[name='sizePct']",
+    message: 'Use positionNotionalPct and riskPerTradePct; sizePct is ambiguous and forbidden.',
+  },
+  {
+    selector: 'Identifier[name=/^(placeOrder|submitOrder|sendOrder)$/]',
+    message: 'Live-order submission is prohibited. YEAR95 is paper-trading only.',
+  },
+];
+
+const processEnvSelector = {
+  selector: "MemberExpression[object.name='process'][property.name='env']",
+  message: 'Read process.env only in apps/*/src/main.ts and inject configuration elsewhere.',
+};
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "apps/*/dist/**", "packages/*/dist/**", "node_modules/**", "coverage/**"],
+    ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**'],
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
-        console: "readonly",
-        process: "readonly",
+        console: 'readonly',
+        process: 'readonly',
       },
     },
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      'no-restricted-syntax': ['error', ...forbiddenIdentifiers],
+    },
+  },
+  {
+    files: ['apps/**/*.{js,mjs,cjs,ts,tsx}', 'packages/**/*.{js,mjs,cjs,ts,tsx}'],
+    ignores: ['apps/*/src/main.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', processEnvSelector, ...forbiddenIdentifiers],
+    },
+  },
 );
