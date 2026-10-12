@@ -77,4 +77,25 @@ describe('applyParameters', () => {
     const result = applyParameters(sql, values);
     expect(result).toBe("SELECT NULL, TRUE, 42, 'O''Connor'");
   });
+
+  it('should ignore $ references inside dollar quotes with unicode tags', () => {
+    const sql = "SELECT $café$ $1 $café$ AS val";
+    const values = [];
+    const result = applyParameters(sql, values);
+    expect(result).toBe("SELECT $café$ $1 $café$ AS val");
+  });
+
+  it('should replace parameters following a dollar quote', () => {
+    const sql = "SELECT $tag$ text $tag$, $1";
+    const values = ["value"];
+    const result = applyParameters(sql, values);
+    expect(result).toBe("SELECT $tag$ text $tag$, 'value'");
+  });
+
+  it('should replace multi-digit parameters', () => {
+    const sql = "SELECT $1, $10";
+    const values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const result = applyParameters(sql, values);
+    expect(result).toBe("SELECT 1, 10");
+  });
 });

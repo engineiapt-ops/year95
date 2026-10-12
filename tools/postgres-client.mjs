@@ -140,7 +140,7 @@ export function applyParameters(sql, values = []) {
 
     // 6. Dollar quotes and Parameters
     if (c === '$') {
-      let match = sql.substring(i).match(/^\$([a-zA-Z_][a-zA-Z0-9_]*)?\$/);
+      let match = sql.substring(i).match(/^\$([a-zA-Z_\x80-\uFFFF][a-zA-Z0-9_\x80-\uFFFF]*)?\$/);
       if (match) {
         let tag = match[0];
         let start = i;
