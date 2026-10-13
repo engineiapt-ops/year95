@@ -38,6 +38,12 @@ async function main() {
 
   const rootDir = fileURLToPath(new URL('..', import.meta.url));
   const plan = await loadMigrationPlan(rootDir);
+  const indexCorrectionMigration = plan.migrations.find(
+    ({ record }) => record.name === '028_reconcile_historical_indexes.sql',
+  );
+  if (!indexCorrectionMigration) {
+    throw new Error('Canonical index correction migration 028 is missing');
+  }
   const admin = new PsqlDatabaseClient({ connectionString, schemaName: 'public' });
   const suffix = randomUUID().replaceAll('-', '');
   const baselineSchema = 'year95_baseline_' + suffix;
@@ -61,7 +67,7 @@ async function main() {
   try {
     await reference.transaction([
       { sql: plan.baselineSchemaSql },
-      { sql: plan.baselineCorrectionsSql },
+      { sql: indexCorrectionMigration.sql },
     ]);
     await runMigrations(baseline, { plan });
     const localComparison = await compareSchemaFingerprintsIgnoringTables(
@@ -76,12 +82,9 @@ async function main() {
       [referenceSchema],
     );
     const report = {
-      source: 'db/baseline/schema.sql + schema-corrections.sql',
+      source: 'db/baseline/schema.sql + 028_reconcile_historical_indexes.sql',
       schemaSqlSha256: plan.baselineRecords.find((record) => record.name === 'schema.sql')
         ?.checksum,
-      schemaCorrectionsSha256: plan.baselineRecords.find(
-        (record) => record.name === 'schema-corrections.sql',
-      )?.checksum,
       baselineMigrationCount: plan.baselineRecords.filter(({ name }) => /^\d{3}_/.test(name))
         .length,
       migrationChecksums: plan.baselineRecords.map(({ name, checksum, origin }) => ({
@@ -94,7 +97,7 @@ async function main() {
         indexesAndConstraintsVerifiedBy: 'schemaFingerprint',
       },
       localComparison: localComparison.equivalent
-        ? 'PASS — empty-database runner matches canonical schema and corrections'
+        ? 'PASS — empty-database runner matches schema.sql plus forward migrations'
         : 'DIVERGENCE — ' + localComparison.differences.join(', '),
       localDifferences: localComparison.differences,
       liveComparison:
