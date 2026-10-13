@@ -1,6 +1,4 @@
 /* global process, console */
-const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE_DIR);
-
 const requiredEnvironment = [
   'WEB_ORIGIN',
   'API_ORIGIN',
@@ -67,11 +65,28 @@ async function main() {
     throw new Error('Local service URLs and the public anon key must be present.');
   }
 
+  const { chromium } = await import(`${process.env.PLAYWRIGHT_PACKAGE_DIR}/index.mjs`);
   let rejectCurrentUserRequest = false;
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
+    const apiBrowserEvents = [];
+    page.on('response', (response) => {
+      const url = response.url();
+      if (url.startsWith(`${API_ORIGIN}/`)) {
+        apiBrowserEvents.push({ path: new URL(url).pathname, status: response.status() });
+      }
+    });
+    page.on('requestfailed', (request) => {
+      const url = request.url();
+      if (url.startsWith(`${API_ORIGIN}/`)) {
+        apiBrowserEvents.push({
+          path: new URL(url).pathname,
+          failure: request.failure()?.errorText ?? 'unknown',
+        });
+      }
+    });
 
     await page.route(`${API_ORIGIN}/v1/me`, async (route) => {
       if (!rejectCurrentUserRequest || route.request().method() !== 'GET') {
@@ -103,7 +118,25 @@ async function main() {
     await page.waitForURL(`${WEB_ORIGIN}/`, { timeout: 20_000 });
     await waitForVisible(page.getByRole('heading', { name: 'Visão geral' }), 'protected dashboard');
     await waitForVisible(page.getByText('Saúde da API', { exact: true }), 'API health card');
-    await waitForVisible(page.getByText('Online', { exact: true }), 'API reports online');
+    try {
+      await waitForVisible(page.getByText('Online', { exact: true }), 'API reports online');
+    } catch {
+      const healthCardText = await page
+        .locator('section[aria-label="Saúde da API"]')
+        .innerText()
+        .catch(() => 'health card unavailable');
+      let directHealthDescription = 'direct /health request failed';
+      try {
+        const directHealth = await page.request.get(`${API_ORIGIN}/health`);
+        directHealthDescription = `HTTP ${directHealth.status()}: ${(await directHealth.text()).slice(0, 300)}`;
+      } catch {
+        // The sanitized description below is sufficient; do not print request internals.
+      }
+      console.error(
+        `API health diagnostics: card="${healthCardText}", direct="${directHealthDescription}", browserRequests=${JSON.stringify(apiBrowserEvents)}`,
+      );
+      throw new Error('Dashboard did not report API health as Online.');
+    }
     await waitForVisible(
       page.getByText('Readiness do banco', { exact: true }),
       'database readiness card',
