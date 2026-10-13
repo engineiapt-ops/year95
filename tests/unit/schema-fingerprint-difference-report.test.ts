@@ -180,7 +180,8 @@ describe('live schema object-level comparison', () => {
       {
         table_name: 'market_data',
         index_name: 'idx_market_data_unexpected',
-        definition: 'CREATE INDEX idx_market_data_unexpected ON $SCHEMA.market_data USING btree (symbol)',
+        definition:
+          'CREATE INDEX idx_market_data_unexpected ON $SCHEMA.market_data USING btree (symbol)',
       },
     ];
 
