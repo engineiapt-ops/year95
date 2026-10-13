@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../packages/config/src/index.js';
-import { healthResponseSchema, httpErrorResponseSchema, readyResponseSchema } from '../../packages/contracts/src/index.js';
+import {
+  healthResponseSchema,
+  httpErrorResponseSchema,
+  readyResponseSchema,
+} from '../../packages/contracts/src/index.js';
 import { buildApp, createApiApp } from '../../apps/api/src/app.js';
 import { VERSION } from '../../apps/api/src/index.js';
 
@@ -88,7 +92,9 @@ describe('YEAR95 API runtime', () => {
 
 
 describe('YEAR95 API shell contracts', () => {
-  it('returns an opaque request id and the shared error envelope for protected API requests', async () => {
+  it(
+    'returns an opaque request id and the shared error envelope for protected API requests',
+    async () => {
     const app = buildApp({
       config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'fatal' }),
     });
