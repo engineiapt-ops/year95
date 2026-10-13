@@ -354,12 +354,13 @@ function filterFingerprint(
   fingerprint: SchemaFingerprint,
   keepRow: (category: SchemaFingerprintCategory, row: Record<string, unknown>) => boolean,
 ): SchemaFingerprint {
-  return Object.fromEntries(
-    SCHEMA_FINGERPRINT_CATEGORIES.map((category) => [
-      category,
-      fingerprint[category].filter((row) => keepRow(category, row)),
-    ]),
-  ) as SchemaFingerprint;
+  return {
+    tables: fingerprint.tables.filter((row) => keepRow('tables', row)),
+    columns: fingerprint.columns.filter((row) => keepRow('columns', row)),
+    constraints: fingerprint.constraints.filter((row) => keepRow('constraints', row)),
+    indexes: fingerprint.indexes.filter((row) => keepRow('indexes', row)),
+    triggers: fingerprint.triggers.filter((row) => keepRow('triggers', row)),
+  };
 }
 
 function collectFingerprintDifferences(
