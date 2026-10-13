@@ -103,7 +103,7 @@ export function evaluateLatestCandleFreshness(input: {
   const dataAsOfMs = input.latestCandle.closeTime.getTime();
 
   if (!Number.isFinite(checkedAtMs)) {
-    throw new InvalidMarketDataError('Readiness check time is invalid');
+    throw new InvalidMarketDataError('Market-data check time is invalid');
   }
   if (!Number.isFinite(dataAsOfMs)) {
     throw new InvalidMarketDataError('Latest candle close time is invalid');
