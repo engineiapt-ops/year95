@@ -44,33 +44,64 @@ export function DashboardPage({ apiClient }: DashboardPageProps) {
     setReadiness(pendingState);
     setIdentity(pendingState);
 
-    void client.getHealth()
+    void client
+      .getHealth()
       .then((result) => {
-        if (active) setHealth({ tone: 'ok', value: 'Online', detail: `${result.service} · v${result.version}` });
+        if (active)
+          setHealth({
+            tone: 'ok',
+            value: 'Online',
+            detail: `${result.service} · v${result.version}`,
+          });
       })
       .catch((error: unknown) => {
-        if (active) setHealth({ tone: 'error', value: 'Indisponível', detail: error instanceof Error ? error.message : 'Falha de conexão' });
+        if (active)
+          setHealth({
+            tone: 'error',
+            value: 'Indisponível',
+            detail: error instanceof Error ? error.message : 'Falha de conexão',
+          });
       });
 
-    void client.getReadiness()
+    void client
+      .getReadiness()
       .then((result) => {
         if (!active) return;
         setReadiness(
           result.ready
-            ? { tone: 'ok', value: 'Pronto', detail: 'PostgreSQL respondeu à verificação de readiness.' }
-            : { tone: 'warning', value: 'Não pronto', detail: 'A API está acessível, mas o banco não está pronto.' },
+            ? {
+                tone: 'ok',
+                value: 'Pronto',
+                detail: 'PostgreSQL respondeu à verificação de readiness.',
+              }
+            : {
+                tone: 'warning',
+                value: 'Não pronto',
+                detail: 'A API está acessível, mas o banco não está pronto.',
+              },
         );
       })
       .catch((error: unknown) => {
-        if (active) setReadiness({ tone: 'error', value: 'Indisponível', detail: error instanceof Error ? error.message : 'Falha de conexão' });
+        if (active)
+          setReadiness({
+            tone: 'error',
+            value: 'Indisponível',
+            detail: error instanceof Error ? error.message : 'Falha de conexão',
+          });
       });
 
-    void client.getMe()
+    void client
+      .getMe()
       .then((result) => {
         if (active) setIdentity({ tone: 'ok', value: result.email, detail: `ID: ${result.id}` });
       })
       .catch((error: unknown) => {
-        if (active) setIdentity({ tone: 'error', value: 'Não verificado pela API', detail: error instanceof Error ? error.message : 'Falha na validação da identidade' });
+        if (active)
+          setIdentity({
+            tone: 'error',
+            value: 'Não verificado pela API',
+            detail: error instanceof Error ? error.message : 'Falha na validação da identidade',
+          });
       });
 
     return () => {
@@ -91,12 +122,28 @@ export function DashboardPage({ apiClient }: DashboardPageProps) {
         </button>
       </header>
       <div className="status-grid">
-        <StatusCard title="Saúde da API" value={health.value} tone={health.tone} {...(health.detail ? { detail: health.detail } : {})} />
-        <StatusCard title="Readiness do banco" value={readiness.value} tone={readiness.tone} {...(readiness.detail ? { detail: readiness.detail } : {})} />
-        <StatusCard title="Usuário autenticado" value={identity.value} tone={identity.tone} {...((identity.detail ?? user?.email) ? { detail: identity.detail ?? user?.email } : {})} />
+        <StatusCard
+          title="Saúde da API"
+          value={health.value}
+          tone={health.tone}
+          {...(health.detail ? { detail: health.detail } : {})}
+        />
+        <StatusCard
+          title="Readiness do banco"
+          value={readiness.value}
+          tone={readiness.tone}
+          {...(readiness.detail ? { detail: readiness.detail } : {})}
+        />
+        <StatusCard
+          title="Usuário autenticado"
+          value={identity.value}
+          tone={identity.tone}
+          {...((identity.detail ?? user?.email) ? { detail: identity.detail ?? user?.email } : {})}
+        />
       </div>
       <p className="dashboard-note">
-        A API valida o JWT e a allowlist no backend. Este painel não envia ordens nem executa operações financeiras reais.
+        A API valida o JWT e a allowlist no backend. Este painel não envia ordens nem executa
+        operações financeiras reais.
       </p>
     </main>
   );

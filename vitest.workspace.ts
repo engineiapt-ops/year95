@@ -16,7 +16,9 @@ export default defineWorkspace([
     resolve: {
       alias: {
         '@year95/config': fileURLToPath(new URL('./packages/config/src/index.ts', import.meta.url)),
-        '@year95/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
+        '@year95/contracts': fileURLToPath(
+          new URL('./packages/contracts/src/index.ts', import.meta.url),
+        ),
       },
     },
     test: {

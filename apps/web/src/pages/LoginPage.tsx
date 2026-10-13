@@ -38,15 +38,26 @@ export function LoginPage() {
         <h1 id="login-title">YEAR95</h1>
         <p className="muted">Entre para acessar seu painel de operações em paper trading.</p>
         {sessionExpired ? (
-          <p role="status" className="notice notice--warning">Sua sessão expirou. Entre novamente para continuar.</p>
+          <p role="status" className="notice notice--warning">
+            Sua sessão expirou. Entre novamente para continuar.
+          </p>
         ) : null}
         {!client ? (
           <p role="alert" className="notice notice--error">
-            Supabase Auth não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente local.
+            Supabase Auth não está configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no
+            ambiente local.
           </p>
         ) : null}
-        {authError ? <p role="alert" className="notice notice--error">{authError}</p> : null}
-        {formError ? <p role="alert" className="notice notice--error">{formError}</p> : null}
+        {authError ? (
+          <p role="alert" className="notice notice--error">
+            {authError}
+          </p>
+        ) : null}
+        {formError ? (
+          <p role="alert" className="notice notice--error">
+            {formError}
+          </p>
+        ) : null}
 
         <form onSubmit={(event) => void onSubmit(event)} className="login-form">
           <label htmlFor="email">E-mail</label>
@@ -73,7 +84,9 @@ export function LoginPage() {
             {submitting ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-        <p className="login-footnote">Acesso por Supabase Auth. O cadastro público não está habilitado.</p>
+        <p className="login-footnote">
+          Acesso por Supabase Auth. O cadastro público não está habilitado.
+        </p>
       </section>
     </main>
   );

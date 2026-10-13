@@ -87,19 +87,29 @@ export class WebApiClient {
     try {
       payload = await response.json();
     } catch {
-      throw new ApiClientError('A API retornou uma resposta inválida.', { status: response.status });
+      throw new ApiClientError('A API retornou uma resposta inválida.', {
+        status: response.status,
+      });
     }
 
     const parsed = schema.safeParse(payload);
     if (response.status === 401 && accessToken) {
       await this.onUnauthorized();
-      throw new ApiClientError('Sessão expirada. Entre novamente.', { status: 401, code: 'SESSION_EXPIRED' });
+      throw new ApiClientError('Sessão expirada. Entre novamente.', {
+        status: 401,
+        code: 'SESSION_EXPIRED',
+      });
     }
 
-    if (!response.ok && !(options.allowServiceUnavailable && response.status === 503 && parsed.success)) {
+    if (
+      !response.ok &&
+      !(options.allowServiceUnavailable && response.status === 503 && parsed.success)
+    ) {
       const apiError = httpErrorResponseSchema.safeParse(payload);
       throw new ApiClientError(
-        apiError.success ? apiError.data.error.message : 'A API não conseguiu concluir a solicitação.',
+        apiError.success
+          ? apiError.data.error.message
+          : 'A API não conseguiu concluir a solicitação.',
         {
           status: response.status,
           ...(apiError.success ? { code: apiError.data.error.code } : {}),

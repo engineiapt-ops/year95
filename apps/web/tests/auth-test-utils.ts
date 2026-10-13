@@ -40,7 +40,10 @@ export function createMockAuthClient(session: Session | null = null): AuthClient
       },
       signInWithPassword: async ({ email }) => {
         if (email === 'bad@example.test') {
-          return { data: { user: null, session: null }, error: { message: 'Credenciais inválidas' } };
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Credenciais inválidas' },
+          };
         }
         currentSession = createMockSession(email);
         for (const listener of listeners) listener('SIGNED_IN', currentSession);

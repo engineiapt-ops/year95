@@ -91,7 +91,9 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
       setAuthError(null);
       setSessionExpired(false);
       if (!client) {
-        throw new Error('Supabase Auth não está configurado. Confira VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
+        throw new Error(
+          'Supabase Auth não está configurado. Confira VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
+        );
       }
       const { error } = await client.auth.signInWithPassword({ email, password });
       if (error) throw error;
@@ -104,7 +106,9 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
     if (!client) return;
     const { error } = await client.auth.signOut();
     if (error) {
-      setAuthError('A sessão foi removida deste app, mas o servidor de autenticação não confirmou o logout.');
+      setAuthError(
+        'A sessão foi removida deste app, mas o servidor de autenticação não confirmou o logout.',
+      );
     }
   }, [client]);
 
@@ -135,7 +139,17 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
       expireSession,
       clearAuthError,
     }),
-    [client, session, loading, authError, sessionExpired, signIn, signOut, expireSession, clearAuthError],
+    [
+      client,
+      session,
+      loading,
+      authError,
+      sessionExpired,
+      signIn,
+      signOut,
+      expireSession,
+      clearAuthError,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
