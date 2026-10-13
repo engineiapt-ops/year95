@@ -228,19 +228,15 @@ jobs:
 
           constraint_row="$(readonly_query "SELECT con.contype::text || '|' || pg_get_constraintdef(con.oid, true) || '|' || con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
           if [[ -z "$constraint_row" ]]; then
-            constraint_type="missing"
-            constraint_validated="false"
-            constraint_definition="missing"
-            post_errors+=("benchmark_results_estrategia_check is missing after migration")
-          else
-            IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
-            if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" ||
-                  "$constraint_definition" != *"'baseline'::text"* ||
-                  "$constraint_definition" != *"'baseline_risk'::text"* ||
-                  "$constraint_definition" != *"'buyhold'::text"* ||
-                  "$constraint_definition" != *"'jev'::text"* ]]; then
-              post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
-            fi
+            echo "::error::Expected constraint public.benchmark_results.benchmark_results_estrategia_check is missing; refusing to continue."
+            exit 1
+          fi
+          IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+          expected_constraint="CHECK (estrategia = ANY (ARRAY['baseline'::text, 'buyhold'::text, 'jev'::text]))"
+          if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" || "$constraint_definition" != "$expected_constraint" ]]; then
+            echo "::error::The current benchmark strategy CHECK does not match the reviewed precondition; refusing to continue."
+            printf 'Observed constraint type=%s validated=%s definition=%s\n' "$constraint_type" "$constraint_validated" "$constraint_definition"
+            exit 1
           fi
           counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
           IFS=$'\t' read -r pre_benchmark_rows pre_backtest_rows pre_wf_rows <<< "$counts"
@@ -449,84 +445,22 @@ jobs:
             fi
           done <<< "$migration_rows"
 
-          constraint_row="$(readonly_query "SELECT con.contype::text, pg_get_constraintdef(con.oid, true), con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
+          constraint_row="$(readonly_query "SELECT con.contype::text || '|' || pg_get_constraintdef(con.oid, true) || '|' || con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
           if [[ -z "$constraint_row" ]]; then
             constraint_type="missing"
             constraint_validated="false"
             constraint_definition="missing"
             post_errors+=("benchmark_results_estrategia_check is missing after migration")
           else
-            IFS=
-                "$constraint_definition" != *"'baseline'::text"* ||
-                "$constraint_definition" != *"'baseline_risk'::text"* ||
-                "$constraint_definition" != *"'buyhold'::text"* ||
-                "$constraint_definition" != *"'jev'::text"* ]]; then
-            post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
-          fi
-
-          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
-          IFS=$'\t' read -r post_benchmark_rows post_backtest_rows post_wf_rows <<< "$counts"
-          if [[ "$post_benchmark_rows" != "$PRE_BENCHMARK_ROWS" ]]; then
-            post_errors+=("benchmark_results row count changed: before=$PRE_BENCHMARK_ROWS after=$post_benchmark_rows")
-          fi
-          if [[ "$post_backtest_rows" != "$PRE_BACKTEST_ROWS" ]]; then
-            post_errors+=("backtest_runs row count changed: before=$PRE_BACKTEST_ROWS after=$post_backtest_rows")
-          fi
-          if [[ "$post_wf_rows" != "$PRE_WF_ROWS" ]]; then
-            post_errors+=("walk_forward_folds row count changed: before=$PRE_WF_ROWS after=$post_wf_rows")
-          fi
-
-          identity_exists="$(readonly_query "SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL")"
-          IFS=$'\t' read -r allowed_emails_exists user_profiles_exists <<< "$identity_exists"
-          if [[ "$allowed_emails_exists" != "t" || "$user_profiles_exists" != "t" ]]; then
-            post_errors+=("Expected new identity tables are missing: allowed_emails=$allowed_emails_exists user_profiles=$user_profiles_exists")
-            allowed_emails_rows="not checked"
-            user_profiles_rows="not checked"
-          else
-            identity_counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.allowed_emails), (SELECT COUNT(*)::bigint FROM public.user_profiles)")"
-            IFS=$'\t' read -r allowed_emails_rows user_profiles_rows <<< "$identity_counts"
-            if [[ "$allowed_emails_rows" != "0" || "$user_profiles_rows" != "0" ]]; then
-              post_errors+=("New identity tables should be empty: allowed_emails=$allowed_emails_rows user_profiles=$user_profiles_rows")
+            IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+            if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" ||
+                  "$constraint_definition" != *"'baseline'::text"* ||
+                  "$constraint_definition" != *"'baseline_risk'::text"* ||
+                  "$constraint_definition" != *"'buyhold'::text"* ||
+                  "$constraint_definition" != *"'jev'::text"* ]]; then
+              post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
             fi
           fi
-
-          {
-            echo "## Post-migration state"
-            echo
-            echo "- Migration runner result: PASS"
-            echo "- Migrations in ledger: \`$actual_migration_names\`"
-            echo "- Dump artifact size: \`$DUMP_BYTES bytes\`"
-            echo "- Dump SHA-256: \`$DUMP_SHA256\`"
-            echo "- Constraint after: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
-            echo "- Row counts after: \`benchmark_results=$post_benchmark_rows\`, \`backtest_runs=$post_backtest_rows\`, \`walk_forward_folds=$post_wf_rows\`"
-            echo "- New tables: \`allowed_emails=$allowed_emails_rows rows\`, \`user_profiles=$user_profiles_rows rows\`"
-            echo
-            echo "### Current ledger after migration (name | checksum | origin)"
-            echo
-            echo ' ```text'
-            printf '%s\n' "$ledger_after"
-            echo ' ```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if (( ${#post_errors[@]} > 0 )); then
-            echo "::error::Post-migration verification found ${#post_errors[@]} problem(s). No automatic correction was attempted."
-            for problem in "${post_errors[@]}"; do
-              echo "::error::$problem"
-            done
-            exit 1
-          fi
-
-          echo "Post-migration verification passed; canonical comparison remains a separate workflow."
-\t' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
-          fi
-          if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" ||
-                "$constraint_definition" != *"'baseline'::text"* ||
-                "$constraint_definition" != *"'baseline_risk'::text"* ||
-                "$constraint_definition" != *"'buyhold'::text"* ||
-                "$constraint_definition" != *"'jev'::text"* ]]; then
-            post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
-          fi
-
           counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
           IFS=$'\t' read -r post_benchmark_rows post_backtest_rows post_wf_rows <<< "$counts"
           if [[ "$post_benchmark_rows" != "$PRE_BENCHMARK_ROWS" ]]; then
