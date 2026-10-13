@@ -173,6 +173,27 @@ describe('live schema object-level comparison', () => {
     });
   });
 
+  test('an extra index on an unrelated table fails the comparison', () => {
+    const live = withIdentityTables();
+    live.indexes = [
+      ...live.indexes,
+      {
+        table_name: 'market_data',
+        index_name: 'idx_market_data_unexpected',
+        definition: 'CREATE INDEX idx_market_data_unexpected ON $SCHEMA.market_data USING btree (symbol)',
+      },
+    ];
+
+    const report = compareLiveSchemaFingerprints(canonical, live, migration027Identity);
+
+    expect(report.equivalent).toBe(false);
+    expect(report.unexpected).toContainEqual({
+      category: 'indexes',
+      object: 'market_data.idx_market_data_unexpected',
+      differenceType: 'extra in database',
+    });
+  });
+
   test('an extra column inside an expected identity table still fails', () => {
     const live = withIdentityTables();
     live.columns = [
