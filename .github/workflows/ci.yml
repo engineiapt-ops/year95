@@ -68,6 +68,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build then lint on a clean checkout
         run: pnpm build && pnpm lint
+      - name: Diagnose migration workflow formatting
+        run: |
+          pnpm exec prettier .github/workflows/db-migrate.yml > /tmp/db-migrate.prettier.yml
+          diff -u .github/workflows/db-migrate.yml /tmp/db-migrate.prettier.yml || true
       - name: Format check
         run: pnpm format:check
       - name: Check forward-only migrations
