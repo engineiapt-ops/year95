@@ -159,9 +159,7 @@ async function main() {
       report.liveComparison = comparison.equivalent
         ? 'PASS — no unexpected schema differences; migration 027 objects are accounted for'
         : 'DIVERGENCE — ' + comparison.unexpectedCount + ' unexpected object-level differences';
-      report.liveDifferences = [
-        ...new Set(comparison.unexpected.map(({ category }) => category)),
-      ];
+      report.liveDifferences = [...new Set(comparison.unexpected.map(({ category }) => category))];
       report.liveExpectedDifferenceCount = comparison.expectedCount;
       report.liveUnexpectedDifferenceCount = comparison.unexpectedCount;
       report.liveExpectedDifferences = comparison.expected;
