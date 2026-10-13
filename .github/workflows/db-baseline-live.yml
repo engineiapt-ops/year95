@@ -6,9 +6,12 @@ on:
     paths:
       - '.github/workflows/db-baseline-live.yml'
   workflow_run:
-    workflows: ["Production database migrations"]
-    types: [completed]
-    branches: [main]
+    workflows:
+      - Production database migrations
+    types:
+      - completed
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -19,7 +22,7 @@ concurrency:
 
 jobs:
   compare:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     name: Compare live Supabase schema (read-only)
     runs-on: ubuntu-latest
     timeout-minutes: 20
