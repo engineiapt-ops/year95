@@ -104,8 +104,8 @@ jobs:
               --command='BEGIN READ ONLY; SHOW server_version; COMMIT;' \
               2>"$RUNNER_TEMP/year95-server-version.err"
           )" || {
-            cat "$RUNNER_TEMP/year95-server-version.err"
-            echo "::error::Unable to connect. For Supabase, use the session pooler on port 5432 if direct IPv6 connectivity is unavailable."
+            echo "::error::PostgreSQL connection/version probe failed; connection diagnostics were suppressed to protect the connection string."
+            echo "::error::For Supabase, use the session pooler on port 5432 if direct IPv6 connectivity is unavailable."
             exit 1
           }
           server_major="${server_version%%.*}"
@@ -318,11 +318,34 @@ jobs:
           dump_file="$RUNNER_TEMP/year95-public.dump"
           restore_list="$RUNNER_TEMP/year95-public-restore-list.txt"
 
-          "$PG_BIN_DIR/pg_dump" \
+          dump_stderr="$RUNNER_TEMP/year95-pg-dump.stderr"
+          if ! "$PG_BIN_DIR/pg_dump" \
             --dbname="$DATABASE_URL_MIGRATE" \
             --schema=public \
             --format=custom \
-            --file="$dump_file"
+            --file="$dump_file" 2>"$dump_stderr"; then
+            node --input-type=module - "$dump_stderr" "$RUNNER_TEMP/year95-pg-dump.redacted.stderr" <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const [inputPath, outputPath] = process.argv.slice(2);
+          let message = await readFile(inputPath, 'utf8');
+          const raw = process.env.DATABASE_URL_MIGRATE;
+          if (raw) {
+            message = message.split(raw).join('[REDACTED_DATABASE_URL]');
+            try {
+              const url = new URL(raw);
+              for (const value of [url.password, decodeURIComponent(url.password)]) {
+                if (value) message = message.split(value).join('[REDACTED_PASSWORD]');
+              }
+            } catch {}
+          }
+          message = message.replace(/postgres(?:ql)?:\/\/[^\s"'"`]+/gi, '[REDACTED_POSTGRES_URL]');
+          message = message.replace(/(password\s*[=:]\s*)\S+/gi, '$1[REDACTED_PASSWORD]');
+          await writeFile(outputPath, message);
+          NODE
+            cat "$RUNNER_TEMP/year95-pg-dump.redacted.stderr"
+            echo "::error::pg_dump failed. Production migrations will not run; connection details were redacted."
+            exit 1
+          fi
 
           if [[ ! -s "$dump_file" ]]; then
             echo "::error::Backup dump is missing or empty. Production migrations will not run."
@@ -377,9 +400,31 @@ jobs:
         run: |
           set -euo pipefail
           runner_log="$RUNNER_TEMP/year95-migration-runner.log"
+          runner_safe_log="$RUNNER_TEMP/year95-migration-runner.redacted.log"
+
+          redact_runner_log() {
+            node --input-type=module - "$runner_log" "$runner_safe_log" <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const [inputPath, outputPath] = process.argv.slice(2);
+          let message = await readFile(inputPath, 'utf8');
+          for (const raw of [process.env.DATABASE_URL, process.env.DATABASE_URL_MIGRATE].filter(Boolean)) {
+            message = message.split(raw).join('[REDACTED_DATABASE_URL]');
+            try {
+              const url = new URL(raw);
+              for (const value of [url.password, decodeURIComponent(url.password)]) {
+                if (value) message = message.split(value).join('[REDACTED_PASSWORD]');
+              }
+            } catch {}
+          }
+          message = message.replace(/postgres(?:ql)?:\/\/[^\s"'"`]+/gi, '[REDACTED_POSTGRES_URL]');
+          message = message.replace(/(password\s*[=:]\s*)\S+/gi, '$1[REDACTED_PASSWORD]');
+          await writeFile(outputPath, message);
+          NODE
+          }
 
           if pnpm --filter @year95/persistence migrate >"$runner_log" 2>&1; then
-            cat "$runner_log"
+            redact_runner_log
+            cat "$runner_safe_log"
             {
               echo "## Migration runner"
               echo
@@ -389,11 +434,12 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           else
             runner_status=$?
-            cat "$runner_log"
+            redact_runner_log
+            cat "$runner_safe_log"
             echo "::error::The official migration runner failed with exit code $runner_status. It will not be retried."
             ledger_after_failure="$(
               "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=$'\t' \
-                --command='BEGIN READ ONLY; SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name; COMMIT;'
+                --command='BEGIN READ ONLY; SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name; COMMIT;' 2>"$RUNNER_TEMP/year95-ledger-after-failure.err"
             )" || ledger_after_failure="[unable to read ledger after runner failure]"
             {
               echo "## Migration runner failed"
@@ -409,7 +455,7 @@ jobs:
               echo "### Complete runner output"
               echo
               echo ' ```text'
-              cat "$runner_log"
+              cat "$runner_safe_log"
               echo ' ```'
             } >> "$GITHUB_STEP_SUMMARY"
             exit "$runner_status"
