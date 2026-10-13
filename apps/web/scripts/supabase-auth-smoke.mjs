@@ -14,7 +14,11 @@ const password = process.env.AUTH_SMOKE_PASSWORD ?? 'Year95-local-smoke-2026!';
 assertLoopback(SUPABASE_URL, 'SUPABASE_URL');
 assertLoopback(API_BASE_URL, 'API_BASE_URL');
 assertLoopback(WEB_BASE_URL, 'WEB_BASE_URL');
-assert.match(email, /@example\.test$/i, 'Auth smoke test must use a non-production .test address');
+assert.match(
+  email,
+  /@example\.test$/i,
+  'Auth smoke test must use a non-production .test address',
+);
 
 const serviceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = SUPABASE_ANON_KEY;
@@ -73,8 +77,14 @@ try {
   assert.equal(meResponse.status, 200, 'API must accept the real local Supabase JWT');
   const me = await meResponse.json();
   assert.equal(me.id, signInData.user.id, 'API identity must match the signed-in Auth user');
-  assert.equal(me.email?.toLowerCase(), email.toLowerCase(), 'API must return the authenticated email');
-  console.log('PASS: real local Supabase Auth sign-in, JWT verification, allowlist, /health, /ready and /v1/me');
+  assert.equal(
+    me.email?.toLowerCase(),
+    email.toLowerCase(),
+    'API must return the authenticated email',
+  );
+  console.log(
+    'PASS: real local Supabase Auth sign-in, JWT verification, allowlist, /health, /ready and /v1/me',
+  );
 
   const playwright = await import(pathToFileURL(PLAYWRIGHT_MODULE).href);
   browser = await playwright.chromium.launch({ headless: true, args: ['--no-sandbox'] });
@@ -90,10 +100,12 @@ try {
   await page.getByText('Online', { exact: true }).waitFor({ state: 'visible' });
   await page.getByText('Pronto', { exact: true }).waitFor({ state: 'visible' });
   await page.getByText(email, { exact: true }).waitFor({ state: 'visible' });
-  console.log('PASS: browser login reaches dashboard and renders live API, database and API-verified user state');
+  console.log(
+    'PASS: browser login reaches dashboard and renders live API, database and API-verified user state',
+  );
 
-  // Exercise the UI response to a 401 from the API. The successful login and API/JWT
-  // checks above use the real local services; only this controlled expiry response is intercepted.
+  // Only this controlled 401 response is intercepted; sign-in and the dashboard's live service
+  // calls above use the real local Supabase Auth and YEAR95 API.
   await page.route('**/v1/me', async (route) => {
     await route.fulfill({
       status: 401,
@@ -104,17 +116,21 @@ try {
     });
   });
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('status').filter({ hasText: 'Sua sessão expirou. Entre novamente' }).waitFor({
-    state: 'visible',
-  });
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Sua sessão expirou. Entre novamente' })
+    .waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
-  console.log('PASS: API 401 clears the UI session and returns the user to login with the expiry notice');
+  await page.unroute('**/v1/me');
+  console.log(
+    'PASS: API 401 clears the UI session and returns the user to login with the expiry notice',
+  );
 
   await page.getByLabel('E-mail').fill(email);
   await page.getByLabel('Senha').fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await page.getByRole('heading', { name: 'Visão geral' }).waitFor({ state: 'visible' });
-  await page.unroute('**/v1/me');
+  await page.getByText('Online', { exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await page.getByRole('heading', { name: 'YEAR95', exact: true }).waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
