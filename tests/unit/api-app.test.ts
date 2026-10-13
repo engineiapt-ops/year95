@@ -90,7 +90,7 @@ describe('YEAR95 API runtime', () => {
 describe('YEAR95 API shell contracts', () => {
   it('returns an opaque request id and the shared error envelope for unknown routes', async () => {
     const app = buildApp({
-      config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'silent' }),
+      config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'fatal' }),
     });
 
     try {
@@ -114,7 +114,7 @@ describe('YEAR95 API shell contracts', () => {
     const app = buildApp({
       config: loadConfig('api', {
         NODE_ENV: 'test',
-        LOG_LEVEL: 'silent',
+        LOG_LEVEL: 'fatal',
         CORS_ORIGINS: 'https://console.example.test',
       }),
     });
@@ -139,7 +139,7 @@ describe('YEAR95 API shell contracts', () => {
     const app = buildApp({
       config: loadConfig('api', {
         NODE_ENV: 'test',
-        LOG_LEVEL: 'silent',
+        LOG_LEVEL: 'fatal',
         CORS_ORIGINS: 'https://console.example.test',
       }),
     });
@@ -167,7 +167,7 @@ describe('YEAR95 API shell contracts', () => {
     const app = buildApp({
       config: loadConfig('api', {
         NODE_ENV: 'test',
-        LOG_LEVEL: 'silent',
+        LOG_LEVEL: 'fatal',
         RATE_LIMIT_MAX: '2',
         RATE_LIMIT_HEAVY_MAX: '1',
       }),
@@ -191,7 +191,7 @@ describe('YEAR95 API shell contracts', () => {
     const app = buildApp({
       config: loadConfig('api', {
         NODE_ENV: 'test',
-        LOG_LEVEL: 'silent',
+        LOG_LEVEL: 'fatal',
         RATE_LIMIT_MAX: '10',
         RATE_LIMIT_HEAVY_MAX: '1',
       }),
