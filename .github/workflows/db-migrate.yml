@@ -126,6 +126,7 @@ jobs:
             exit 1
           fi
 
+          printf 'CONNECTION_MODE=%s\n' "$connection_mode" >> "$GITHUB_ENV"
           printf 'SERVER_VERSION=%s\n' "$server_version" >> "$GITHUB_ENV"
           printf 'SERVER_MAJOR=%s\n' "$server_major" >> "$GITHUB_ENV"
           printf 'PG_DUMP_VERSION=%s\n' "$pg_dump_version" >> "$GITHUB_ENV"
