@@ -45,7 +45,9 @@ async function scanBundle(
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
 });
 
 describe('web bundle secret scan', () => {
