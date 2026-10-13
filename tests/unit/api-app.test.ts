@@ -185,8 +185,9 @@ describe('YEAR95 API shell contracts', () => {
 
       const limited = await app.inject({ method: 'GET', url: '/v1/me' });
       expect(limited.statusCode).toBe(429);
-      expect(httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code)
-        .toBe('TOO_MANY_REQUESTS');
+      expect(
+        httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code,
+      ).toBe('TOO_MANY_REQUESTS');
       expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
     } finally {
       await app.close();
@@ -210,8 +211,9 @@ describe('YEAR95 API shell contracts', () => {
       expect((await app.inject({ method: 'GET', url: '/v1/heavy-test' })).statusCode).toBe(401);
       const limited = await app.inject({ method: 'GET', url: '/v1/heavy-test' });
       expect(limited.statusCode).toBe(429);
-      expect(httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code)
-        .toBe('TOO_MANY_REQUESTS');
+      expect(
+        httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code,
+      ).toBe('TOO_MANY_REQUESTS');
     } finally {
       await app.close();
     }
