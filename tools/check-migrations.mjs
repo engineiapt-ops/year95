@@ -24,11 +24,11 @@ async function main() {
     previous = number;
     const rawSql = await readFile(path.join(migrationDir, file), 'utf8');
     const sql = withoutCommentsAndStringLiterals(rawSql);
-    const destructive = /\\b(?:DROP|TRUNCATE|RENAME)\\b/i;
+    const destructive = /\b(?:DROP|TRUNCATE|RENAME)\b/i;
     if (destructive.test(sql)) {
       const normalizedRawSql = rawSql
-        .replace(/--[^\\n\\r]*/g, '')
-        .replace(/\\s+/g, ' ')
+        .replace(/--[^\n\r]*/g, '')
+        .replace(/\s+/g, ' ')
         .trim();
       const approvedCheckConstraintReplacement =
         file === '029_benchmark_results_estrategia_widen.sql' &&
