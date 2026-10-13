@@ -58,3 +58,27 @@ The legacy ai-financial-analyst repository is reference-only. Its behavior and s
 ## Current status
 
 YEAR95 is being implemented incrementally from the approved project contract. Each PR is limited to its declared scope.
+
+
+## API shell and Docker
+
+The API is built through the injectable `buildApp(options)` factory in `apps/api/src/app.ts`. Existing `createApiApp` imports remain supported. The HTTP shell provides:
+
+- `GET /health` for liveness without a database dependency.
+- `GET /ready` for PostgreSQL readiness, returning `503` on failure.
+- Versioned routes beneath `/v1`.
+- Exact-origin CORS allowlisting through `CORS_ORIGINS`; an empty allowlist denies browser origins.
+- Standard and heavy per-client limits of `RATE_LIMIT_MAX` (default 120/minute) and `RATE_LIMIT_HEAVY_MAX` (default 20/minute). Heavy routes declare `config: { rateLimit: 'heavy' }` and are subject to both limits.
+- Opaque `x-request-id` response identifiers, redacted structured Pino logs and a shared HTTP error envelope.
+- Graceful `SIGINT`/`SIGTERM` shutdown that closes the Fastify server and PostgreSQL pool.
+
+The in-memory rate limiter is local to each API process; multi-replica shared limits are not part of this shell PR.
+
+Build the API image from the repository root:
+
+```sh
+docker build -f apps/api/Dockerfile -t year95-api:local .
+docker run --rm -p 3000:3000 -e DATABASE_URL="$DATABASE_URL" -e CORS_ORIGINS="http://localhost:5173" year95-api:local
+```
+
+The `API Docker` GitHub Actions workflow builds the image for API-related pull requests.
