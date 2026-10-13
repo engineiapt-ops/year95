@@ -47,7 +47,7 @@ describe('forward-only migration metadata', () => {
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
   });
-  test('loads additive migrations 024-028 with migration origin', async () => {
+  test('loads additive migrations 024-029 with migration origin', async () => {
     const plan = await loadMigrationPlan(rootDir);
     expect(plan.migrations.map(({ record }) => record.name)).toEqual([
       '024_add_instruments.sql',
@@ -55,6 +55,7 @@ describe('forward-only migration metadata', () => {
       '026_enable_rls_and_pin_audit_search_path.sql',
       '027_add_identity_repository_tables.sql',
       '028_reconcile_historical_indexes.sql',
+      '029_benchmark_results_estrategia_widen.sql',
     ]);
     expect(plan.migrations[0]?.record.origin).toBe('migration');
     expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
@@ -90,6 +91,18 @@ describe('forward-only migration metadata', () => {
     );
     expect(
       plan.allRecords.some((record) => record.name === '028_reconcile_historical_indexes.sql'),
+    ).toBe(true);
+    expect(plan.migrations[5]?.record.origin).toBe('migration');
+    expect(plan.migrations[5]?.sql).toContain(
+      'DROP CONSTRAINT IF EXISTS benchmark_results_estrategia_check',
+    );
+    expect(plan.migrations[5]?.sql).toContain(
+      "CHECK (estrategia IN ('baseline', 'baseline_risk', 'buyhold', 'jev'))",
+    );
+    expect(
+      plan.allRecords.some(
+        (record) => record.name === '029_benchmark_results_estrategia_widen.sql',
+      ),
     ).toBe(true);
   });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
