@@ -31,8 +31,11 @@ async function main() {
         .replace(/\s+/g, ' ')
         .trim();
       const expectedCheckReplacementSql = [
-        'ALTER TABLE benchmark_results DROP CONSTRAINT IF EXISTS benchmark_results_estrategia_check;',
-        "ALTER TABLE benchmark_results ADD CONSTRAINT benchmark_results_estrategia_check CHECK (estrategia IN ('baseline', 'baseline_risk', 'buyhold', 'jev'));",
+        'ALTER TABLE benchmark_results DROP CONSTRAINT IF EXISTS',
+        'benchmark_results_estrategia_check;',
+        'ALTER TABLE benchmark_results ADD CONSTRAINT',
+        'benchmark_results_estrategia_check CHECK (estrategia IN',
+        "('baseline', 'baseline_risk', 'buyhold', 'jev'));",
       ].join(' ');
       const approvedCheckConstraintReplacement =
         file === '029_benchmark_results_estrategia_widen.sql' &&
