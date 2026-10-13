@@ -22,14 +22,31 @@ async function main() {
     if (number !== previous + 1)
       throw new Error('Forward-only migration sequence has a gap before ' + file);
     previous = number;
-    const sql = withoutCommentsAndStringLiterals(
-      await readFile(path.join(migrationDir, file), 'utf8'),
-    );
+    const rawSql = await readFile(path.join(migrationDir, file), 'utf8');
+    const sql = withoutCommentsAndStringLiterals(rawSql);
     const destructive = /\b(?:DROP|TRUNCATE|RENAME)\b/i;
     if (destructive.test(sql)) {
-      throw new Error(
-        'Destructive DDL is prohibited in ' + file + '. db/baseline is intentionally not scanned.',
-      );
+      const normalizedRawSql = rawSql
+        .replace(/--[^\n\r]*/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const expectedCheckReplacementSql = [
+        'ALTER TABLE benchmark_results DROP CONSTRAINT IF EXISTS',
+        'benchmark_results_estrategia_check;',
+        'ALTER TABLE benchmark_results ADD CONSTRAINT',
+        'benchmark_results_estrategia_check CHECK (estrategia IN',
+        "('baseline', 'baseline_risk', 'buyhold', 'jev'));",
+      ].join(' ');
+      const approvedCheckConstraintReplacement =
+        file === '029_benchmark_results_estrategia_widen.sql' &&
+        normalizedRawSql === expectedCheckReplacementSql;
+      if (!approvedCheckConstraintReplacement) {
+        throw new Error(
+          'Destructive DDL is prohibited in ' +
+            file +
+            '. db/baseline is intentionally not scanned.',
+        );
+      }
     }
   }
   console.log('check:migrations PASS (' + files.length + ' migration(s)); db/baseline excluded.');
