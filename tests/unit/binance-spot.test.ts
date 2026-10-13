@@ -46,7 +46,7 @@ function makeProvider(
   return new BinanceSpotProvider({
     baseUrl,
     fetchImpl,
-    now: () => new Date(now),
+    now: () => new Date(now.getTime()),
   });
 }
 
@@ -118,7 +118,7 @@ describe('Binance Spot adapter', () => {
     });
 
     await expect(
-      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '15m' as '1h' }),
+      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '15m' as unknown as '1h' }),
     ).rejects.toMatchObject<Partial<BinanceSpotProviderError>>({
       code: 'UNSUPPORTED_TIMEFRAME',
     });
