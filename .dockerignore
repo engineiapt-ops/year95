@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+legacy
+.env
+.env.*
+!.env.example
+**/dist
+coverage
+.pnpm-store
+.tmp
+.cache
+*.log
