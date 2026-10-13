@@ -622,6 +622,40 @@ integrationTest(
   },
 );
 
+integrationTest(
+  'schema fingerprint ignores physical column order but detects definition drift',
+  async () => {
+    await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
+      await reference.transaction([
+        { sql: 'CREATE TABLE column_order_probe (first_value TEXT, second_value INTEGER)' },
+      ]);
+      await target.transaction([
+        { sql: 'CREATE TABLE column_order_probe (second_value INTEGER, first_value TEXT)' },
+      ]);
+
+      const reordered = await compareSchemaFingerprints(
+        reference,
+        target,
+        referenceSchema,
+        targetSchema,
+      );
+      expect(reordered.equivalent, reordered.differences.join(', ')).toBe(true);
+
+      await target.transaction([
+        { sql: 'ALTER TABLE column_order_probe ALTER COLUMN first_value SET NOT NULL' },
+      ]);
+      const drift = await compareSchemaFingerprints(
+        reference,
+        target,
+        referenceSchema,
+        targetSchema,
+      );
+      expect(drift.equivalent).toBe(false);
+      expect(drift.differences).toContain('columns');
+    });
+  },
+);
+
 integrationTest('empty database baseline equals canonical schema.sql structure', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction(canonicalSchemaStatements);
