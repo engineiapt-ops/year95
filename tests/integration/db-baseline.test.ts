@@ -656,7 +656,7 @@ integrationTest(
   },
 );
 
-integrationTest('empty database baseline equals canonical schema.sql structure', async () => {
+integrationTest('empty database baseline equals canonical schema plus corrections', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction(canonicalSchemaStatements);
     await runMigrations(target, { plan });
