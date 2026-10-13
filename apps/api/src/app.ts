@@ -299,7 +299,7 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
 
     if (statusCode >= 500) {
       request.log.error(
-        { requestId: request.id, errorName: error.name, errorCode: code },
+        { requestId: request.id, errorName: error instanceof Error ? error.name : 'UnknownError', errorCode: code },
         'Unhandled API error',
       );
     }
