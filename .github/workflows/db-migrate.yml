@@ -438,19 +438,19 @@ jobs:
             cat "$runner_safe_log"
             echo "::error::The official migration runner failed with exit code $runner_status. It will not be retried."
             ledger_after_failure="$(
-              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=$'\\t' \\
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=$'\t' \
                 --command='BEGIN READ ONLY; SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name; COMMIT;' 2>"$RUNNER_TEMP/year95-ledger-after-failure.err"
             )" || ledger_after_failure="[unable to read ledger after runner failure]"
             constraint_after_failure="$(
-              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \\
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
                 --command="BEGIN READ ONLY; SELECT pg_get_constraintdef(con.oid, true) FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'; COMMIT;" 2>"$RUNNER_TEMP/year95-constraint-after-failure.err"
             )" || constraint_after_failure="[unable to read constraint after runner failure]"
             counts_after_failure="$(
-              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=',' \\
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=',' \
                 --command='BEGIN READ ONLY; SELECT (SELECT COUNT(*) FROM public.benchmark_results), (SELECT COUNT(*) FROM public.backtest_runs), (SELECT COUNT(*) FROM public.walk_forward_folds); COMMIT;' 2>"$RUNNER_TEMP/year95-counts-after-failure.err"
             )" || counts_after_failure="[unable to read row counts after runner failure]"
             identity_after_failure="$(
-              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=',' \\
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=',' \
                 --command="BEGIN READ ONLY; SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL; COMMIT;" 2>"$RUNNER_TEMP/year95-identity-after-failure.err"
             )" || identity_after_failure="[unable to read identity table state after runner failure]"
             {
@@ -465,7 +465,7 @@ jobs:
               echo "- Current ledger after failure (name | checksum | origin):"
               echo
               echo ' ```text'
-              printf '%s\\n' "$ledger_after_failure"
+              printf '%s\n' "$ledger_after_failure"
               echo ' ```'
               echo
               echo "### Complete runner output (connection values redacted)"
