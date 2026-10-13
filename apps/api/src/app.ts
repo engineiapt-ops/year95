@@ -61,9 +61,7 @@ function sendHttpError(
   code: HttpErrorCode,
   message: string,
 ): FastifyReply {
-  return reply.code(statusCode).send(
-    httpErrorResponseSchema.parse({ error: { code, message } }),
-  );
+  return reply.code(statusCode).send(httpErrorResponseSchema.parse({ error: { code, message } }));
 }
 
 function errorCodeForStatus(statusCode: number): HttpErrorCode {
@@ -315,12 +313,7 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
       );
     }
 
-    return sendHttpError(
-      reply,
-      statusCode,
-      code,
-      publicMessageForStatus(statusCode),
-    );
+    return sendHttpError(reply, statusCode, code, publicMessageForStatus(statusCode));
   });
 
   app.setNotFoundHandler((request, reply) =>
