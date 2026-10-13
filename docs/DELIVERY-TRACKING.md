@@ -4,12 +4,21 @@ This register separates internal YEAR95 work-item identifiers from GitHub pull r
 
 ## Confirmed mapping
 
-| Work item / capability | GitHub delivery | Status | Acceptance notes |
-| --- | --- | --- | --- |
-| R-006 — Supabase JWT authentication and API route protection | [PR #24](https://github.com/engineiapt-ops/year95/pull/24) | Merged | Backend validates JWTs and protects application routes. |
-| R-007 — Production API shell | [PR #33](https://github.com/engineiapt-ops/year95/pull/33) | Merged | Fastify production shell, health/readiness, HTTP hardening and Docker. |
-| PR #008 — Web shell (approved brief) | [PR #36](https://github.com/engineiapt-ops/year95/pull/36) | Code merged; real-auth acceptance pending | Browser Supabase client, login, protected route, dashboard and typed API client are implemented. See [issue #37](https://github.com/engineiapt-ops/year95/issues/37) for the outstanding local Supabase smoke test. |
-| Binance Spot market-data adapter | [PR #34](https://github.com/engineiapt-ops/year95/pull/34) | Merged | Public BTCUSDT candle adapter only; market-data HTTP routes, candle persistence and decision workflow were explicitly outside its scope. No internal R identifier is assigned here because an approved brief mapping it to an R item was not found. |
+### R-006 — Supabase JWT authentication and API route protection
+
+GitHub delivery: [PR #24](https://github.com/engineiapt-ops/year95/pull/24). Status: merged. The backend validates JWTs and protects application routes.
+
+### R-007 — Production API shell
+
+GitHub delivery: [PR #33](https://github.com/engineiapt-ops/year95/pull/33). Status: merged. Includes the Fastify production shell, health/readiness, HTTP hardening and Docker.
+
+### PR #008 — Web shell (approved brief)
+
+GitHub delivery: [PR #36](https://github.com/engineiapt-ops/year95/pull/36). Code is merged; real-auth acceptance is pending. The browser Supabase client, login, protected route, dashboard and typed API client are implemented. See [issue #37](https://github.com/engineiapt-ops/year95/issues/37) for the outstanding local Supabase smoke test.
+
+### Binance Spot market-data adapter
+
+GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Status: merged. This is a public BTCUSDT candle adapter only; market-data HTTP routes, candle persistence and decision workflow were explicitly outside its scope. No internal R identifier is assigned here because an approved brief mapping it to an R item was not found.
 
 ## Identifier correction
 
