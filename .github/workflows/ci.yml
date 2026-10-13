@@ -70,6 +70,14 @@ jobs:
         run: pnpm build && pnpm lint
       - name: Format check
         run: pnpm format:check
+      - name: Diagnose Prettier differences for schema comparison changes
+        if: failure()
+        run: |
+          for file in packages/persistence/src/schema-fingerprint.ts tests/unit/schema-fingerprint-difference-report.test.ts tools/db-baseline.mjs; do
+            formatted="$RUNNER_TEMP/$(basename "$file").formatted"
+            pnpm exec prettier "$file" > "$formatted"
+            diff -u "$file" "$formatted" || true
+          done
       - name: Check forward-only migrations
         run: pnpm check:migrations
 
