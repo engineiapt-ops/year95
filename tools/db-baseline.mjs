@@ -149,6 +149,19 @@ async function main() {
       report.liveUnexpectedDifferenceCount = comparison.unexpectedCount;
       report.liveExpectedDifferences = comparison.expected;
       report.liveUnexpectedDifferences = comparison.unexpected;
+      report.liveDifferenceReport = {
+        policy: comparison.policy,
+        expected: {
+          classification: 'EXPECTED',
+          count: comparison.expectedCount,
+          objects: comparison.expected,
+        },
+        unexpected: {
+          classification: 'UNEXPECTED',
+          count: comparison.unexpectedCount,
+          objects: comparison.unexpected,
+        },
+      };
       if (!comparison.equivalent) process.exitCode = 2;
     }
     console.log(JSON.stringify(report, null, 2));
