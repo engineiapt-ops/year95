@@ -16,7 +16,6 @@ const MAX_REQUESTED_CORS_HEADERS = new Set(['accept', 'authorization', 'content-
 const ALLOWED_CORS_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
 
 type RateLimitTier = 'standard' | 'heavy' | 'disabled';
-type ActiveRateLimitTier = Exclude<RateLimitTier, 'disabled'>;
 
 declare module 'fastify' {
   interface FastifyContextConfig {
