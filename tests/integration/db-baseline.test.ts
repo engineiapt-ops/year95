@@ -189,6 +189,7 @@ integrationTest(
         { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
         { name: '026_enable_rls_and_pin_audit_search_path.sql', origin: 'migration' },
         { name: '027_add_identity_repository_tables.sql', origin: 'migration' },
+        { name: '028_reconcile_historical_indexes.sql', origin: 'migration' },
       ]);
       expect(applied.map((row) => row.name)).toContain('schema.sql');
 
