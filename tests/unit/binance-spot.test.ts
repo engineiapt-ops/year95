@@ -39,10 +39,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
-function makeProvider(
-  fetchImpl: typeof fetch,
-  now = new Date(checkedAtMs),
-): BinanceSpotProvider {
+function makeProvider(fetchImpl: typeof fetch, now = new Date(checkedAtMs)): BinanceSpotProvider {
   return new BinanceSpotProvider({
     baseUrl,
     fetchImpl,
@@ -102,11 +99,11 @@ describe('Binance Spot adapter', () => {
       return jsonResponse([]);
     });
 
-    await expect(
-      provider.getCandles({ symbol: 'ETHUSDT', timeframe: '1h' }),
-    ).rejects.toMatchObject({
-      code: 'UNSUPPORTED_SYMBOL',
-    });
+    await expect(provider.getCandles({ symbol: 'ETHUSDT', timeframe: '1h' })).rejects.toMatchObject(
+      {
+        code: 'UNSUPPORTED_SYMBOL',
+      },
+    );
     expect(callCount).toBe(0);
   });
 
@@ -128,14 +125,14 @@ describe('Binance Spot adapter', () => {
   it('returns a typed safe error for an HTTP failure without echoing the response body', async () => {
     const provider = makeProvider(async () => jsonResponse({ secret: 'do-not-echo' }, 429));
 
-    await expect(
-      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
-    ).rejects.toMatchObject({
-      name: 'BinanceSpotProviderError',
-      code: 'HTTP_ERROR',
-      httpStatus: 429,
-      message: 'Binance Spot returned HTTP 429',
-    });
+    await expect(provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' })).rejects.toMatchObject(
+      {
+        name: 'BinanceSpotProviderError',
+        code: 'HTTP_ERROR',
+        httpStatus: 429,
+        message: 'Binance Spot returned HTTP 429',
+      },
+    );
   });
 
   it('rejects malformed rows, non-finite prices, and inconsistent OHLC values', async () => {
@@ -162,9 +159,7 @@ describe('Binance Spot adapter', () => {
     ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
 
     const inconsistentProvider = makeProvider(async () =>
-      jsonResponse([
-        rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z', '120'),
-      ]),
+      jsonResponse([rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z', '120')]),
     );
     await expect(
       inconsistentProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
@@ -173,9 +168,7 @@ describe('Binance Spot adapter', () => {
 
   it('fails closed when latest candles are stale or absent', async () => {
     const staleProvider = makeProvider(async () =>
-      jsonResponse([
-        rawCandle('2026-10-13T11:00:00.000Z', '2026-10-13T11:59:59.999Z'),
-      ]),
+      jsonResponse([rawCandle('2026-10-13T11:00:00.000Z', '2026-10-13T11:59:59.999Z')]),
     );
 
     await expect(
@@ -190,9 +183,7 @@ describe('Binance Spot adapter', () => {
 
   it('marks fresh latest candles with their source and close timestamp', async () => {
     const provider = makeProvider(async () =>
-      jsonResponse([
-        rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
-      ]),
+      jsonResponse([rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z')]),
     );
 
     const snapshot = await provider.getLatestCandles({
@@ -221,9 +212,7 @@ describe('Binance Spot adapter', () => {
           rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
         ]);
       }
-      return jsonResponse([
-        rawCandle('2026-10-13T11:00:00.000Z', '2026-10-13T11:59:59.999Z'),
-      ]);
+      return jsonResponse([rawCandle('2026-10-13T11:00:00.000Z', '2026-10-13T11:59:59.999Z')]);
     });
 
     const candles = await provider.getHistory({
@@ -244,9 +233,9 @@ describe('Binance Spot adapter', () => {
   });
 
   it('enforces configuration and historical-query bounds', async () => {
-    expect(
-      () => new BinanceSpotProvider({ baseUrl: 'http://api.binance.test' }),
-    ).toThrow(BinanceSpotProviderError);
+    expect(() => new BinanceSpotProvider({ baseUrl: 'http://api.binance.test' })).toThrow(
+      BinanceSpotProviderError,
+    );
 
     const provider = makeProvider(async () => jsonResponse([]));
     await expect(

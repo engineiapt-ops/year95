@@ -82,7 +82,6 @@ docker run --rm -p 3000:3000 -e DATABASE_URL="$DATABASE_URL" -e CORS_ORIGINS="ht
 
 The `API Docker` GitHub Actions workflow builds the image for API-related pull requests.
 
-
 ## Binance Spot market-data adapter
 
 `@year95/providers` exports `BinanceSpotProvider`, which uses the injected `BINANCE_BASE_URL` value and the public Binance Spot `/api/v3/klines` endpoint. It does not read `process.env` during module import and requires no Binance credentials.

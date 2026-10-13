@@ -5,7 +5,4 @@ export {
   BinanceSpotProviderError,
   SUPPORTED_BINANCE_SPOT_SYMBOLS,
 } from './binance-spot.js';
-export type {
-  BinanceSpotErrorCode,
-  BinanceSpotProviderOptions,
-} from './binance-spot.js';
+export type { BinanceSpotErrorCode, BinanceSpotProviderOptions } from './binance-spot.js';

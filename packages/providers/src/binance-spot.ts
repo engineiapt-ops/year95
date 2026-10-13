@@ -30,11 +30,7 @@ export class BinanceSpotProviderError extends Error {
   readonly code: BinanceSpotErrorCode;
   readonly httpStatus: number | undefined;
 
-  constructor(
-    code: BinanceSpotErrorCode,
-    message: string,
-    httpStatus?: number,
-  ) {
+  constructor(code: BinanceSpotErrorCode, message: string, httpStatus?: number) {
     super(message);
     this.name = 'BinanceSpotProviderError';
     this.code = code;
@@ -103,10 +99,7 @@ function normalizeTimeframe(timeframe: string): MarketTimeframe {
   return timeframe as MarketTimeframe;
 }
 
-function parseOptionalTimestamp(
-  value: number | undefined,
-  fieldName: string,
-): number | undefined {
+function parseOptionalTimestamp(value: number | undefined, fieldName: string): number | undefined {
   if (value === undefined) return undefined;
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new BinanceSpotProviderError(
@@ -212,13 +205,7 @@ function parseCandle(value: unknown, nowMs: number): MarketCandle | undefined {
   const low = parsePrice(value[3], 'low');
   const close = parsePrice(value[4], 'close');
   const volume = parseVolume(value[5]);
-  if (
-    high < low ||
-    high < open ||
-    high < close ||
-    low > open ||
-    low > close
-  ) {
+  if (high < low || high < open || high < close || low > open || low > close) {
     throw new BinanceSpotProviderError(
       'INVALID_RESPONSE',
       'Binance returned inconsistent candle OHLC values',
@@ -335,10 +322,7 @@ export class BinanceSpotProvider implements MarketDataProvider {
     try {
       payload = (await response.json()) as unknown;
     } catch {
-      throw new BinanceSpotProviderError(
-        'INVALID_RESPONSE',
-        'Binance Spot returned invalid JSON',
-      );
+      throw new BinanceSpotProviderError('INVALID_RESPONSE', 'Binance Spot returned invalid JSON');
     }
 
     return parseCandleRows(payload, this.now());
@@ -381,10 +365,7 @@ export class BinanceSpotProvider implements MarketDataProvider {
     if (!Number.isFinite(rawChunkSize)) {
       throw new BinanceSpotProviderError('INVALID_QUERY', 'chunkSize must be a finite number');
     }
-    const chunkSize = Math.max(
-      1,
-      Math.min(MAX_KLINES_PER_REQUEST, Math.floor(rawChunkSize)),
-    );
+    const chunkSize = Math.max(1, Math.min(MAX_KLINES_PER_REQUEST, Math.floor(rawChunkSize)));
     const delayMs = query.delayMs ?? 100;
     if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 60_000) {
       throw new BinanceSpotProviderError(
