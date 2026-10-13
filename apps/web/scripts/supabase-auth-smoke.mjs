@@ -16,7 +16,7 @@ assertLoopback(API_BASE_URL, 'API_BASE_URL');
 assertLoopback(WEB_BASE_URL, 'WEB_BASE_URL');
 assert.match(
   email,
-  /@example\.test$/i,
+  /@example\\.test$/i,
   'Auth smoke test must use a non-production .test address',
 );
 
@@ -82,9 +82,7 @@ try {
     email.toLowerCase(),
     'API must return the authenticated email',
   );
-  console.log(
-    'PASS: real local Supabase Auth sign-in, JWT verification, allowlist, /health, /ready and /v1/me',
-  );
+  console.log('PASS: local Supabase Auth, JWT, allowlist, health, readiness and identity');
 
   const playwright = await import(pathToFileURL(PLAYWRIGHT_MODULE).href);
   browser = await playwright.chromium.launch({ headless: true, args: ['--no-sandbox'] });
@@ -100,9 +98,7 @@ try {
   await page.getByText('Online', { exact: true }).waitFor({ state: 'visible' });
   await page.getByText('Pronto', { exact: true }).waitFor({ state: 'visible' });
   await page.getByText(email, { exact: true }).waitFor({ state: 'visible' });
-  console.log(
-    'PASS: browser login reaches dashboard and renders live API, database and API-verified user state',
-  );
+  console.log('PASS: browser login reaches dashboard and verifies live API/database/user cards');
 
   // Only this controlled 401 response is intercepted; sign-in and the dashboard's live service
   // calls above use the real local Supabase Auth and YEAR95 API.
@@ -122,9 +118,7 @@ try {
     .waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
   await page.unroute('**/v1/me');
-  console.log(
-    'PASS: API 401 clears the UI session and returns the user to login with the expiry notice',
-  );
+  console.log('PASS: API 401 expires the UI session and returns to login');
 
   await page.getByLabel('E-mail').fill(email);
   await page.getByLabel('Senha').fill(password);
@@ -134,7 +128,7 @@ try {
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await page.getByRole('heading', { name: 'YEAR95', exact: true }).waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
-  console.log('PASS: logout returns the browser to login');
+  console.log('PASS: logout returns to login');
 } finally {
   if (browser) await browser.close();
   await authClient.auth.signOut().catch(() => undefined);
