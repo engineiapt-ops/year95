@@ -186,6 +186,9 @@ describe('YEAR95 API shell contracts', () => {
         'TOO_MANY_REQUESTS',
       );
       expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+      const resetSeconds = Number(limited.headers['ratelimit-reset']);
+      expect(resetSeconds).toBeGreaterThan(0);
+      expect(resetSeconds).toBeLessThanOrEqual(60);
     } finally {
       await app.close();
     }
