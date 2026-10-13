@@ -4,16 +4,15 @@ Status: **READ-ONLY CATALOG INSPECTION FOUND TWO OMITTED INDEXES AND COLUMN-ORDI
 
 ## Source and interpretation
 
-The immutable historical source is engineiapt-ops/ai-financial-analyst at `e539b1583276c40b6793986d947134e82921ca74`. The 23 historical migration files and the previously recorded `db/baseline/schema.sql` checksum are preserved. The canonical structural baseline is `schema.sql` plus `schema-corrections.sql`, which adds two indexes that existed in the historical final state but were omitted from the schema snapshot.
+The immutable historical source is engineiapt-ops/ai-financial-analyst at `e539b1583276c40b6793986d947134e82921ca74`. The 23 historical migration files and the previously recorded `db/baseline/schema.sql` checksum are preserved. The two indexes omitted from that immutable snapshot are restored by forward-only migration `028_reconcile_historical_indexes.sql`.
 
-A blank database is bootstrapped from `db/baseline/schema.sql` followed by `db/baseline/schema-corrections.sql`, in the same transaction. The 23 historical files are recorded in `schema_migrations` with SHA-256 checksums and `origin=baseline`, but are not re-executed. The new corrections file has its own checksum record; this preserves the existing `schema.sql` ledger checksum. Existing databases are never bootstrapped: missing baseline metadata is recorded only after an injected comparator proves structural equivalence. A missing comparator, checksum mismatch, unknown migration, or structural divergence fails closed.
+A blank database is bootstrapped from `db/baseline/schema.sql`, then migrations in `db/migrations/024+` are applied in order. The 23 historical files are recorded in `schema_migrations` with SHA-256 checksums and `origin=baseline`, but are not re-executed. Migration 028 creates the two indexes with `IF NOT EXISTS`: it repairs already-initialized databases that lack them and is a no-op where they already exist. Existing databases are never bootstrapped: missing baseline metadata is recorded only after an injected comparator proves structural equivalence. A missing comparator, checksum mismatch, unknown migration, or structural divergence fails closed.
 
 ## SHA-256 manifest
 
 | File                                              | SHA-256                                                          |
 | ------------------------------------------------- | ---------------------------------------------------------------- |
 | schema.sql                                        | 30748ff7cb2741184344ab70d51edc5cb6f9cea312abe47541c3fe67eee67001 |
-| schema-corrections.sql                            | 3a74112236609c0e097f440098f522f0455afd75c7c71522a1d26f3ecc82d475 |
 | 001_backtest_runs.sql                             | a3e66fd79a0f9d79958f81cec1efcc4ae43dcd3efb7fe1815442b05f6bf33b96 |
 | 002_backtest_dataset_hash.sql                     | 7bdfe6346f01f5db2091519566ef1aed3f746e57e840974e9584ee40609db594 |
 | 003_execution_model.sql                           | e7869eaecb40e80ae90e7acb54afad9a6f0935e1b920877dc8399b92208ec7ad |
@@ -44,15 +43,15 @@ The structural fingerprint covers tables/views, column definitions by table and 
 
 The optional Supabase comparison is separate and read-only. `tools/db-baseline.mjs` refuses to run unless `DB_BASELINE_DISPOSABLE=1` is set, to guard its temporary-schema DDL. If `SUPABASE_READONLY_DATABASE_URL` is supplied, the comparator uses the connection only for read-only catalog SELECTs. A separate catalog inspection was performed through the authorized Supabase integration, but the full executable comparator has not yet run against a dedicated PostgreSQL connection string.
 
-The canonical schema includes final effects of historical migrations 007–009 and 011 (walk-forward and OOS indexes), 008–009 (walk-forward portfolio tables and indexes), and 022–023 (the instruments table, final Saxo venue constraint, and initial reference rows). The two indexes omitted from `schema.sql` are declared in `schema-corrections.sql` without changing the immutable schema.sql checksum. The baseline also preserves the server-side-only privilege effects represented by migrations 019–020. Integration tests assert the omitted historical indexes exist in the canonical result.
+The canonical schema snapshot includes final effects of historical migrations 007–009 and 011 (walk-forward and OOS indexes), 008–009 (walk-forward portfolio tables and indexes), and 022–023 (the instruments table, final Saxo venue constraint, and initial reference rows). The two indexes omitted from `schema.sql` are restored by migration 028 without rewriting the immutable snapshot or its checksum. The baseline also preserves the server-side-only privilege effects represented by migrations 019–020. Integration tests verify that migration 028 repairs an initialized database missing the indexes and remains safe when the indexes already exist.
 
 ## Comparação com o banco real
 
-**Estado em 2026-10-13: DIVERGÊNCIAS IDENTIFICADAS POR CONSULTAS DE CATÁLOGO SOMENTE DE LEITURA; COMPARAÇÃO COMPLETA PELO RUNNER AINDA PENDENTE.** A inspeção autorizada do projeto Supabase `ai-financial-analyse` confirmou que as 23 tabelas de aplicação esperadas existem, que os 24 registros históricos do baseline têm checksums correspondentes e que os cinco triggers de imutabilidade estão presentes. Também identificou duas diferenças corrigidas nesta branch: `idx_backtest_runs_oos_validation` e `idx_wf_folds_strategy_run` existiam no banco, mas faltavam no schema snapshot; três tabelas tinham uma ordem física de colunas diferente. O arquivo `schema-corrections.sql` registra os índices sem reescrever o `schema.sql` imutável, e o fingerprint agora compara definições de coluna por nome, não por posição.
+**Estado em 2026-10-13: DIVERGÊNCIAS IDENTIFICADAS POR CONSULTAS DE CATÁLOGO SOMENTE DE LEITURA; COMPARAÇÃO COMPLETA PELO RUNNER AINDA PENDENTE.** A inspeção autorizada do projeto Supabase `ai-financial-analyse` confirmou que as 23 tabelas de aplicação esperadas existem, que os 24 registros históricos do baseline têm checksums correspondentes e que os cinco triggers de imutabilidade estão presentes. Também identificou duas diferenças corrigidas nesta branch: `idx_backtest_runs_oos_validation` e `idx_wf_folds_strategy_run` existiam no banco, mas faltavam no schema snapshot; três tabelas tinham uma ordem física de colunas diferente. A migration aditiva 028 restaura os índices sem reescrever o `schema.sql` imutável, e o fingerprint compara definições de coluna por nome, não por posição.
 
 Esta inspeção manual não é reportada como PASS do comparador integral. Para obter o resultado final do runner, execute a comparação em um ambiente com PostgreSQL local descartável e uma URL Supabase dedicada somente leitura, usando `DB_BASELINE_DISPOSABLE=1 SUPABASE_READONLY_DATABASE_URL=... pnpm db:baseline` e `DATABASE_URL` apontando para o PostgreSQL local. Registre o resultado exato. A conexão remota deve executar apenas consultas de catálogo `SELECT`. Se qualquer outra divergência aparecer, interrompa e peça uma decisão do mantenedor; não altere o banco remoto e não aplique migrations automaticamente.
 
-**Limite desta correção:** nenhuma escrita foi realizada no Supabase. O histórico remoto registra as migrations 024–026; a migration 027 atualmente versionada no repositório não foi executada nem faz parte desta reconciliação somente de leitura.
+**Limite desta correção:** nenhuma escrita foi realizada no Supabase. O histórico remoto registra as migrations 024–026; as migrations 027 e 028 permanecem sem aplicação remota e não foram executadas como parte deste PR.
 
 ## Recognized legacy upgrade path
 
@@ -61,6 +60,6 @@ Migrations `024_add_instruments.sql` and `025_add_decision_log_paper_idempotency
 ## Commands
 
 - `pnpm check:migrations` validates only `db/migrations/` and rejects filenames below 024, sequence gaps and destructive DDL. `db/baseline/` is intentionally excluded.
-- `DATABASE_URL=postgresql://... DB_BASELINE_DISPOSABLE=1 pnpm db:baseline` applies `schema.sql` in a temporary schema of a disposable local database and prints the manifest/schema report.
-- Add `SUPABASE_READONLY_DATABASE_URL=...` to the previous command to compare the disposable baseline against the live public schema using SELECT-only queries.
+- `DATABASE_URL=postgresql://... DB_BASELINE_DISPOSABLE=1 pnpm db:baseline` builds the canonical comparison schema from `schema.sql` plus migration 028, runs all forward migrations in a temporary schema of a disposable local database, and prints the manifest/schema report.
+- Add `SUPABASE_READONLY_DATABASE_URL=...` to the previous command to compare the canonical schema snapshot plus migration 028 against the live public schema using SELECT-only queries.
 - `DATABASE_URL=... DB_BASELINE_REFERENCE_URL=... pnpm --filter @year95/persistence migrate` runs the forward-only runner. An existing target database fails closed if a reference comparator is not provided or the schema diverges.
