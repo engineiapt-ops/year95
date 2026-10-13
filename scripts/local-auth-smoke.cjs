@@ -45,7 +45,19 @@ async function signIn(page) {
   await page.getByRole('button', { name: 'Entrar' }).click();
   const authResponse = await authResponsePromise;
   if (authResponse.status() !== 200) {
-    throw new Error(`Local Supabase password sign-in failed with HTTP ${authResponse.status()}`);
+    let errorDetail = '';
+    try {
+      const payload = await authResponse.json();
+      const safeParts = [payload.code, payload.error_code, payload.error, payload.msg, payload.message]
+        .filter((part) => typeof part === 'string' && part.length > 0)
+        .map((part) => part.replace(/[\r\n]+/g, ' ').slice(0, 180));
+      if (safeParts.length > 0) errorDetail = `: ${safeParts.join(' — ')}`;
+    } catch {
+      // Do not print a raw response that could contain credentials or tokens.
+    }
+    throw new Error(
+      `Local Supabase password sign-in failed with HTTP ${authResponse.status()}${errorDetail}`,
+    );
   }
   return authResponse;
 }
