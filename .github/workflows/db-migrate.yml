@@ -32,7 +32,7 @@ jobs:
       - name: Checkout the main commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up pnpm
@@ -177,15 +177,15 @@ jobs:
           migration_files=(db/migrations/*.sql)
           pending_numbers=()
           expected_post_names=()
-          for migration_path in "\${migration_files[@]}"; do
-            migration_name="\${migration_path##*/}"
-            migration_number="\${migration_name%%_*}"
+          for migration_path in "${migration_files[@]}"; do
+            migration_name="${migration_path##*/}"
+            migration_number="${migration_name%%_*}"
             expected_post_names+=("$migration_name")
-            if [[ -z "\${ledger_migration_names[$migration_name]+present}" ]]; then
+            if [[ -z "${ledger_migration_names[$migration_name]+present}" ]]; then
               pending_numbers+=("$migration_number")
             fi
           done
-          actual_pending="$(IFS=,; printf '%s' "\${pending_numbers[*]}")"
+          actual_pending="$(IFS=,; printf '%s' "${pending_numbers[*]}")"
           if [[ "$actual_pending" != "$EXPECTED_PENDING" ]]; then
             {
               echo "## Preflight aborted: unexpected pending migration set"
