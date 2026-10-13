@@ -10,10 +10,11 @@ function normalizePublicOrigin(value: string | undefined): string | undefined {
 
   try {
     const url = new URL(candidate);
-    const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
+    const localHost =
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
       url.hostname.endsWith('.localhost');
-    const validProtocol = url.protocol === 'https:' ||
-      (url.protocol === 'http:' && localHost);
+    const validProtocol =
+      url.protocol === 'https:' || (url.protocol === 'http:' && localHost);
 
     if (
       !validProtocol ||
