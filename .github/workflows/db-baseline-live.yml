@@ -1,0 +1,88 @@
+name: Live Supabase schema comparison
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/db-baseline-live.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-supabase-schema-comparison
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    name: Compare live Supabase schema (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: year95
+          POSTGRES_PASSWORD: year95
+          POSTGRES_DB: year95_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U year95 -d year95_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://year95:year95@localhost:5432/year95_test
+      DB_BASELINE_DISPOSABLE: '1'
+      SUPABASE_READONLY_DATABASE_URL: ${{ secrets.SUPABASE_READONLY_DATABASE_URL }}
+    steps:
+      - name: Checkout trusted main commit
+        uses: actions/checkout@v4
+
+      - name: Verify read-only connection secret is configured
+        shell: bash
+        env:
+          READONLY_DATABASE_URL: ${{ secrets.SUPABASE_READONLY_DATABASE_URL }}
+        run: |
+          if [[ -z "${READONLY_DATABASE_URL}" ]]; then
+            echo "::error::Repository secret SUPABASE_READONLY_DATABASE_URL is missing."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare roles in disposable PostgreSQL
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $roles$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+              EXECUTE 'CREATE ROLE anon NOLOGIN';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+              EXECUTE 'CREATE ROLE authenticated NOLOGIN';
+            END IF;
+          END
+          $roles$;
+          SQL
+
+      - name: Compare canonical baseline with live Supabase
+        run: pnpm db:baseline
