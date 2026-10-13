@@ -59,7 +59,10 @@ async function main() {
     readOnly: true,
   });
   try {
-    await reference.transaction([{ sql: plan.baselineSchemaSql }]);
+    await reference.transaction([
+      { sql: plan.baselineSchemaSql },
+      { sql: plan.baselineCorrectionsSql },
+    ]);
     await runMigrations(baseline, { plan });
     const localComparison = await compareSchemaFingerprintsIgnoringTables(
       referenceReadOnly,
@@ -73,10 +76,14 @@ async function main() {
       [referenceSchema],
     );
     const report = {
-      source: 'db/baseline/schema.sql',
+      source: 'db/baseline/schema.sql + schema-corrections.sql',
       schemaSqlSha256: plan.baselineRecords.find((record) => record.name === 'schema.sql')
         ?.checksum,
-      baselineMigrationCount: plan.baselineRecords.length - 1,
+      schemaCorrectionsSha256: plan.baselineRecords.find(
+        (record) => record.name === 'schema-corrections.sql',
+      )?.checksum,
+      baselineMigrationCount: plan.baselineRecords.filter(({ name }) => /^\\d{3}_/.test(name))
+        .length,
       migrationChecksums: plan.baselineRecords.map(({ name, checksum, origin }) => ({
         name,
         checksum,
@@ -87,7 +94,7 @@ async function main() {
         indexesAndConstraintsVerifiedBy: 'schemaFingerprint',
       },
       localComparison: localComparison.equivalent
-        ? 'PASS — empty-database runner matches canonical schema.sql'
+        ? 'PASS — empty-database runner matches canonical schema and corrections'
         : 'DIVERGENCE — ' + localComparison.differences.join(', '),
       localDifferences: localComparison.differences,
       liveComparison:
