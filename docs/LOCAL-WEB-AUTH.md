@@ -17,11 +17,27 @@ Prerequisites: Docker and the Supabase CLI.
 
 The app does not implement public registration. User creation, allowlisting, database bootstrap, and all keys in this guide are for the local development stack only.
 
-## Automated validation
+## Real-auth smoke test in GitHub Actions
+
+The workflow `.github/workflows/local-auth-smoke.yml` starts a **disposable local** Supabase stack on a GitHub-hosted Linux runner, applies the repository's baseline and forward-only migrations to that local database, creates one temporary Auth user plus an allowlist entry, and launches the actual API and web app.
+
+The Playwright browser test verifies:
+
+- The login form redirects from the protected route.
+- A real password sign-in request to the local Supabase Auth endpoint succeeds.
+- The dashboard receives a healthy API response, a ready PostgreSQL response, and the signed-in identity from the real authenticated `/v1/me` route.
+- Logout clears the local browser session and the protected route returns to login.
+- Session-expiry UI handling reacts to an API `401` by clearing the Auth session and displaying the expiry notice.
+
+The last check uses a controlled `401` response to avoid waiting for a wall-clock JWT expiry; it verifies frontend rejection handling, not the natural passage of token expiration time. The initial sign-in and dashboard identity use the real local Supabase Auth and API. The workflow never links to the production Supabase project.
+
+The workflow runs for pull requests and pushes touching the auth, web, API, migration or smoke-test files, and can also be run manually from GitHub Actions after it has been merged into `main`.
+
+## Other automated validation
 
 - `pnpm --filter @year95/web typecheck`
 - `pnpm --filter @year95/web build` (includes the bundle secret scan)
 - `pnpm test:component`
 - `pnpm test:unit`
 
-Component tests inject a deterministic Auth client; the client tests validate JWT attachment and session expiry. The bundle scanner has unit tests for rejecting backend secret markers, service-role JWTs, and non-anon JWTs. CI does not claim it started the Supabase Docker stack or completed the manual local sign-in flow.
+Component tests inject a deterministic Auth client; client tests also validate JWT attachment and session-expiry handling. The bundle scanner has unit tests for rejecting backend secret markers, service-role JWTs, and non-anon JWTs. These deterministic tests remain separate from the real local-stack browser smoke test.
