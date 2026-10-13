@@ -14,14 +14,14 @@ export interface AppProps {
 export function App({ authClient, apiClient }: AppProps) {
   return (
     <BrowserRouter>
-      <AuthProvider client={authClient}>
+      <AuthProvider {...(authClient !== undefined ? { client: authClient } : {})}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/"
             element={
               <ProtectedRoute>
-                <DashboardPage apiClient={apiClient} />
+                <DashboardPage {...(apiClient ? { apiClient } : {})} />
               </ProtectedRoute>
             }
           />

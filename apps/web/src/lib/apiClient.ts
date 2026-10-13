@@ -7,7 +7,14 @@ import {
   type ReadyResponse,
   type MeResponse,
 } from '@year95/contracts';
-import type { z } from 'zod';
+
+type SafeParseResult<T> =
+  | { readonly success: true; readonly data: T }
+  | { readonly success: false; readonly error: unknown };
+
+interface ResponseSchema<T> {
+  safeParse(input: unknown): SafeParseResult<T>;
+}
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -57,7 +64,7 @@ export class WebApiClient {
 
   private async get<T>(
     path: string,
-    schema: z.ZodType<T>,
+    schema: ResponseSchema<T>,
     options: { readonly allowServiceUnavailable?: boolean } = {},
   ): Promise<T> {
     if (!this.baseUrl) throw new ApiClientError('VITE_API_BASE_URL não está configurada.');

@@ -91,9 +91,9 @@ export function DashboardPage({ apiClient }: DashboardPageProps) {
         </button>
       </header>
       <div className="status-grid">
-        <StatusCard title="Saúde da API" value={health.value} tone={health.tone} detail={health.detail} />
-        <StatusCard title="Readiness do banco" value={readiness.value} tone={readiness.tone} detail={readiness.detail} />
-        <StatusCard title="Usuário autenticado" value={identity.value} tone={identity.tone} detail={identity.detail ?? user?.email} />
+        <StatusCard title="Saúde da API" value={health.value} tone={health.tone} {...(health.detail ? { detail: health.detail } : {})} />
+        <StatusCard title="Readiness do banco" value={readiness.value} tone={readiness.tone} {...(readiness.detail ? { detail: readiness.detail } : {})} />
+        <StatusCard title="Usuário autenticado" value={identity.value} tone={identity.tone} {...((identity.detail ?? user?.email) ? { detail: identity.detail ?? user?.email } : {})} />
       </div>
       <p className="dashboard-note">
         A API valida o JWT e a allowlist no backend. Este painel não envia ordens nem executa operações financeiras reais.
