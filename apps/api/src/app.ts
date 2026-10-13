@@ -175,12 +175,7 @@ function responseForLimit(
   if (decision.allowed) return reply;
 
   reply.header('Retry-After', String(decision.retryAfterSeconds));
-  return sendHttpError(
-    reply,
-    429,
-    'TOO_MANY_REQUESTS',
-    'Rate limit exceeded',
-  );
+  return sendHttpError(reply, 429, 'TOO_MANY_REQUESTS', 'Rate limit exceeded');
 }
 
 export function buildApp(options: ApiAppOptions): FastifyInstance {
@@ -297,9 +292,7 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
 
     const rawStatus = (error as Error & { statusCode?: unknown }).statusCode;
     const statusCode =
-      typeof rawStatus === 'number' && rawStatus >= 400 && rawStatus <= 599
-        ? rawStatus
-        : 500;
+      typeof rawStatus === 'number' && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
     const code = errorCodeForStatus(statusCode);
 
     if (statusCode >= 500) {

@@ -91,30 +91,27 @@ describe('YEAR95 API runtime', () => {
 });
 
 describe('YEAR95 API shell contracts', () => {
-  it(
-    'returns an opaque request id and the shared error envelope for protected API requests',
-    async () => {
-      const app = buildApp({
-        config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'fatal' }),
-      });
+  it('returns an opaque request id and the shared error envelope for protected API requests', async () => {
+    const app = buildApp({
+      config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'fatal' }),
+    });
 
-      try {
-        const response = await app.inject({
-          method: 'GET',
-          url: '/v1/me',
-          headers: { 'x-request-id': 'caller-controlled-id' },
-        });
-        expect(response.statusCode).toBe(401);
-        expect(httpErrorResponseSchema.parse(JSON.parse(response.body) as unknown)).toEqual({
-          error: { code: 'UNAUTHORIZED', message: 'Bearer token required' },
-        });
-        expect(response.headers['x-request-id']).toBeTruthy();
-        expect(response.headers['x-request-id']).not.toBe('caller-controlled-id');
-      } finally {
-        await app.close();
-      }
-    },
-  );
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/me',
+        headers: { 'x-request-id': 'caller-controlled-id' },
+      });
+      expect(response.statusCode).toBe(401);
+      expect(httpErrorResponseSchema.parse(JSON.parse(response.body) as unknown)).toEqual({
+        error: { code: 'UNAUTHORIZED', message: 'Bearer token required' },
+      });
+      expect(response.headers['x-request-id']).toBeTruthy();
+      expect(response.headers['x-request-id']).not.toBe('caller-controlled-id');
+    } finally {
+      await app.close();
+    }
+  });
 
   it('rejects CORS origins that are not present in the configured allowlist', async () => {
     const app = buildApp({
@@ -185,9 +182,9 @@ describe('YEAR95 API shell contracts', () => {
 
       const limited = await app.inject({ method: 'GET', url: '/v1/me' });
       expect(limited.statusCode).toBe(429);
-      expect(
-        httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code,
-      ).toBe('TOO_MANY_REQUESTS');
+      expect(httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code).toBe(
+        'TOO_MANY_REQUESTS',
+      );
       expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
     } finally {
       await app.close();
@@ -211,9 +208,9 @@ describe('YEAR95 API shell contracts', () => {
       expect((await app.inject({ method: 'GET', url: '/v1/heavy-test' })).statusCode).toBe(401);
       const limited = await app.inject({ method: 'GET', url: '/v1/heavy-test' });
       expect(limited.statusCode).toBe(429);
-      expect(
-        httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code,
-      ).toBe('TOO_MANY_REQUESTS');
+      expect(httpErrorResponseSchema.parse(JSON.parse(limited.body) as unknown).error.code).toBe(
+        'TOO_MANY_REQUESTS',
+      );
     } finally {
       await app.close();
     }
