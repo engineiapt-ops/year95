@@ -211,6 +211,25 @@ describe('live schema object-level comparison', () => {
     expect(report.unexpected.some((item) => item.object.startsWith('user_profiles.'))).toBe(true);
   });
 
+  test('a constraint definition changed on an expected identity table still fails', () => {
+    const live = withIdentityTables();
+    live.constraints = live.constraints.map((row) =>
+      row.constraint_name === 'user_profiles_user_id_fkey'
+        ? { ...row, definition: 'FOREIGN KEY (user_id) REFERENCES auth.other_users(id) ON DELETE CASCADE' }
+        : row,
+    );
+
+    const report = compareLiveSchemaFingerprints(canonical, live, migration027Identity);
+
+    expect(report.equivalent).toBe(false);
+    expect(report.unexpected).toContainEqual({
+      category: 'constraints',
+      object: 'user_profiles.user_profiles_user_id_fkey',
+      differenceType: 'definition different',
+      changedFields: ['definition'],
+    });
+  });
+
   test('the report lists individual expected and unexpected objects and their difference types', () => {
     const live = withIdentityTables();
     live.columns = [
