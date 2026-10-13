@@ -106,7 +106,7 @@ The database baseline `001–023` is immutable.
 
 Future migrations `024+` are forward-only and additive. They must not use:
 
-- `DROP`
+- `DROP` (except for the narrowly scoped CHECK replacement allowed by §2.11.1)
 - `TRUNCATE`
 - `RENAME`
 
