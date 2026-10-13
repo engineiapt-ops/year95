@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/db-baseline-live.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
