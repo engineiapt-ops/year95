@@ -104,8 +104,11 @@ jobs:
           SMOKE_EMAIL="year95-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.test"
           SMOKE_PASSWORD="$(openssl rand -hex 24)"
           echo "::add-mask::$SMOKE_PASSWORD"
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -v email="$SMOKE_EMAIL" \
-            -c "INSERT INTO public.allowed_emails(email) VALUES (lower(btrim(:'email'))) ON CONFLICT (email) DO NOTHING"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -v email="$SMOKE_EMAIL" <<'SQL'
+          INSERT INTO public.allowed_emails(email)
+          VALUES (lower(btrim(:'email')))
+          ON CONFLICT (email) DO NOTHING;
+          SQL
 
           set -a
           source "$RUNNER_TEMP/supabase.env"
