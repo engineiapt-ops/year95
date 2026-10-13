@@ -1,0 +1,584 @@
+name: Production database migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_pending:
+        description: 'Expected pending migration numbers, comma-separated (for example 027,028,029).'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: year95-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    # Only run the reviewed workflow definition from the protected default branch.
+    if: github.ref == 'refs/heads/main'
+    name: Apply YEAR95 migrations (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+    env:
+      NODE_VERSION: 22
+      PNPM_VERSION: 9.15.9
+      EXPECTED_PENDING: ${{ inputs.expected_pending }}
+    steps:
+      - name: Checkout the main commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate migration files
+        run: pnpm check:migrations
+
+      - name: Install bootstrap PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client ca-certificates curl gnupg
+
+      - name: Validate connection mode and install matching PostgreSQL client
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL_MIGRATE:-}" ]]; then
+            echo "::error::Environment secret DATABASE_URL_MIGRATE is missing."
+            exit 1
+          fi
+
+          export PGCONNECT_TIMEOUT=10
+          connection_mode="$(node --input-type=module <<'NODE'
+          const raw = process.env.DATABASE_URL_MIGRATE;
+          let url;
+          try {
+            url = new URL(raw);
+          } catch {
+            throw new Error('DATABASE_URL_MIGRATE is not a valid URL; its value is withheld.');
+          }
+          if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+            throw new Error('DATABASE_URL_MIGRATE must be a PostgreSQL URL.');
+          }
+          const port = Number(url.port || '5432');
+          const pooler = /\.pooler\.supabase\.com$/i.test(url.hostname);
+          const direct = /^db\.[a-z0-9-]+\.supabase\.co$/i.test(url.hostname);
+          if (!pooler && !direct) {
+            throw new Error('Host must be a Supabase direct endpoint or Supabase session pooler.');
+          }
+          if (port === 6543) {
+            throw new Error(
+              'Port 6543 is the Supabase transaction pooler. Use the session pooler on port 5432 or a reachable direct connection.',
+            );
+          }
+          if (port !== 5432) {
+            throw new Error('Unsupported PostgreSQL port. Use port 5432.');
+          }
+          console.log(pooler ? 'session-pooler-5432' : 'direct-5432');
+          NODE
+          )"
+          echo "Connection mode accepted: $connection_mode (connection details are not logged)."
+
+          server_version="$(
+            psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+              --command='BEGIN READ ONLY; SHOW server_version; COMMIT;' \
+              2>"$RUNNER_TEMP/year95-server-version.err"
+          )" || {
+            echo "::error::PostgreSQL connection/version probe failed; connection diagnostics were suppressed to protect the connection string."
+            echo "::error::For Supabase, use the session pooler on port 5432 if direct IPv6 connectivity is unavailable."
+            exit 1
+          }
+          server_major="$(printf '%s' "$server_version" | sed -E 's/^([0-9]+)\..*/\1/')"
+          server_minor="$(printf '%s' "$server_version" | sed -E 's/^[0-9]+\.([0-9]+).*/\1/')"
+          if [[ ! "$server_major" =~ ^[0-9]+$ || ! "$server_minor" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not parse the PostgreSQL server major/minor version."
+            exit 1
+          fi
+
+          codename="$(. /etc/os-release && printf '%s' "$VERSION_CODENAME")"
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc |
+            gpg --dearmor |
+            sudo tee /usr/share/keyrings/postgresql.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" |
+            sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y "postgresql-client-${server_major}"
+
+          pg_bin_dir="/usr/lib/postgresql/${server_major}/bin"
+          if [[ ! -x "$pg_bin_dir/pg_dump" || ! -x "$pg_bin_dir/pg_restore" || ! -x "$pg_bin_dir/psql" ]]; then
+            echo "::error::The matching PostgreSQL client binaries were not installed."
+            exit 1
+          fi
+          pg_dump_version="$("$pg_bin_dir/pg_dump" --version)"
+          client_release="$(printf '%s' "$pg_dump_version" | awk '{print $3}')"
+          client_major="$(printf '%s' "$client_release" | cut -d. -f1)"
+          client_minor="$(printf '%s' "$client_release" | cut -d. -f2)"
+          if [[ ! "$client_major" =~ ^[0-9]+$ || ! "$client_minor" =~ ^[0-9]+$ ||
+                ! "$server_minor" =~ ^[0-9]+$ ]] ||
+             (( client_major < server_major )) ||
+             { (( client_major == server_major )) && (( client_minor < server_minor )); }; then
+            echo "::error::pg_dump major/minor version is older than SHOW server_version. Backup is blocked."
+            exit 1
+          fi
+
+          printf 'CONNECTION_MODE=%s\n' "$connection_mode" >> "$GITHUB_ENV"
+          printf 'SERVER_VERSION=%s\n' "$server_version" >> "$GITHUB_ENV"
+          printf 'SERVER_MAJOR=%s\n' "$server_major" >> "$GITHUB_ENV"
+          printf 'PG_DUMP_VERSION=%s\n' "$pg_dump_version" >> "$GITHUB_ENV"
+          printf 'PG_BIN_DIR=%s\n' "$pg_bin_dir" >> "$GITHUB_ENV"
+          printf '%s\n' "$pg_bin_dir" >> "$GITHUB_PATH"
+          echo "PostgreSQL server version: $server_version; compatible pg_dump client: $pg_dump_version."
+
+      - name: Preflight ledger and production state (read-only)
+        id: preflight
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          export PGCONNECT_TIMEOUT=10
+
+          if [[ ! "$EXPECTED_PENDING" =~ ^[0-9]{3}(,[0-9]{3})*$ ]]; then
+            echo "::error::expected_pending must be a comma-separated list such as 027,028,029."
+            exit 1
+          fi
+
+          readonly_query() {
+            local statement="$1"
+            "$PG_BIN_DIR/psql" "$DATABASE_URL_MIGRATE" \
+              --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=$'\t' \
+              --command="BEGIN READ ONLY; ${statement}; COMMIT;"
+          }
+
+          # Compare expected_pending with the actual remote ledger before checksum and schema checks.
+          ledger_before="$(readonly_query 'SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name')"
+          declare -A ledger_migration_names=()
+          while IFS=$'\t' read -r name checksum origin; do
+            [[ -n "$name" ]] || continue
+            if [[ -f "db/migrations/$name" ]]; then
+              ledger_migration_names["$name"]=1
+            fi
+          done <<< "$ledger_before"
+
+          migration_files=(db/migrations/*.sql)
+          pending_numbers=()
+          expected_post_names=()
+          for migration_path in "${migration_files[@]}"; do
+            migration_name="${migration_path##*/}"
+            migration_number="${migration_name%%_*}"
+            expected_post_names+=("$migration_name")
+            if [[ -z "${ledger_migration_names[$migration_name]+present}" ]]; then
+              pending_numbers+=("$migration_number")
+            fi
+          done
+          actual_pending="$(IFS=,; printf '%s' "${pending_numbers[*]}")"
+          if [[ "$actual_pending" != "$EXPECTED_PENDING" ]]; then
+            {
+              echo "## Preflight aborted: unexpected pending migration set"
+              echo
+              echo "- Expected: \`$EXPECTED_PENDING\`"
+              echo "- Actual: \`$actual_pending\`"
+              echo
+              echo "No dump or migration was started."
+              echo
+              echo "### Ledger observed"
+              echo
+              echo ' ```text'
+              printf '%s\n' "$ledger_before"
+              echo ' ```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Pending migration mismatch. Expected '$EXPECTED_PENDING'; actual '$actual_pending'. No changes made."
+            exit 1
+          fi
+          echo "Pending migration check passed: $actual_pending."
+
+          # Validate origin and SHA-256 for previously applied migrations after the pending-set guard.
+          while IFS=$'\t' read -r name checksum origin; do
+            [[ -n "$name" ]] || continue
+            if [[ -f "db/migrations/$name" ]]; then
+              if [[ "$origin" != "migration" ]]; then
+                echo "::error::Migration file $name is recorded with unexpected origin '$origin'; refusing to continue."
+                exit 1
+              fi
+              local_checksum="$(sha256sum -- "db/migrations/$name" | awk '{print $1}')"
+              if [[ "$checksum" != "$local_checksum" ]]; then
+                echo "::error::Checksum mismatch for already-applied migration $name; refusing to continue."
+                exit 1
+              fi
+            elif [[ "$origin" == "migration" ]]; then
+              echo "::error::Unknown applied migration '$name' is present in the remote ledger; refusing to continue."
+              exit 1
+            fi
+          done <<< "$ledger_before"
+
+
+          constraint_row="$(readonly_query "SELECT con.contype::text || '|' || pg_get_constraintdef(con.oid, true) || '|' || con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
+          if [[ -z "$constraint_row" ]]; then
+            echo "::error::Expected constraint public.benchmark_results.benchmark_results_estrategia_check is missing; refusing to continue."
+            exit 1
+          fi
+          IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+          expected_constraint="CHECK (estrategia = ANY (ARRAY['baseline'::text, 'buyhold'::text, 'jev'::text]))"
+          if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" || "$constraint_definition" != "$expected_constraint" ]]; then
+            echo "::error::The current benchmark strategy CHECK does not match the reviewed precondition; refusing to continue."
+            printf 'Observed constraint type=%s validated=%s definition=%s\n' "$constraint_type" "$constraint_validated" "$constraint_definition"
+            exit 1
+          fi
+          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
+          IFS=$'\t' read -r pre_benchmark_rows pre_backtest_rows pre_wf_rows <<< "$counts"
+
+          identity_tables="$(readonly_query "SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL")"
+          IFS=$'\t' read -r allowed_emails_exists user_profiles_exists <<< "$identity_tables"
+
+          long_transactions="$(readonly_query "SELECT COUNT(*)::bigint FROM pg_stat_activity WHERE datname = current_database() AND pid IS DISTINCT FROM pg_backend_pid() AND xact_start IS NOT NULL AND xact_start < now() - interval '1 minute'")"
+          auth_users_locks="$(readonly_query "SELECT COUNT(*)::bigint FROM pg_locks l JOIN pg_class c ON c.oid = l.relation JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'auth' AND c.relname = 'users' AND l.pid IS DISTINCT FROM pg_backend_pid()")"
+
+          {
+            echo "## Pre-migration state"
+            echo
+            echo "- Commit: \`$(git rev-parse HEAD)\`"
+            echo "- PostgreSQL server: \`$SERVER_VERSION\`"
+            echo "- Connection mode: \`$CONNECTION_MODE\`"
+            echo "- Expected pending: \`$EXPECTED_PENDING\`"
+            echo "- Actual pending: \`$actual_pending\`"
+            echo "- Constraint before: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
+            echo "- Row counts before: \`benchmark_results=$pre_benchmark_rows\`, \`backtest_runs=$pre_backtest_rows\`, \`walk_forward_folds=$pre_wf_rows\`"
+            echo "- Identity tables absent before: \`allowed_emails=$allowed_emails_exists\`, \`user_profiles=$user_profiles_exists\`"
+            echo "- Transactions open over 1 minute: \`$long_transactions\`"
+            echo "- Locks on \`auth.users\`: \`$auth_users_locks\`"
+            echo
+            echo "### Current ledger (name | checksum | origin)"
+            echo
+            echo ' ```text'
+            printf '%s\n' "$ledger_before"
+            echo ' ```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$allowed_emails_exists" != "f" || "$user_profiles_exists" != "f" ]]; then
+            echo "::error::allowed_emails and user_profiles must not exist before migration 027. No changes made."
+            exit 1
+          fi
+          if [[ "$long_transactions" != "0" ]]; then
+            echo "::error::Found $long_transactions transaction(s) open longer than one minute. No changes made."
+            exit 1
+          fi
+          if [[ "$auth_users_locks" != "0" ]]; then
+            echo "::error::Found $auth_users_locks lock(s) on auth.users. No changes made."
+            exit 1
+          fi
+
+          printf 'PRE_BENCHMARK_ROWS=%s\n' "$pre_benchmark_rows" >> "$GITHUB_ENV"
+          printf 'PRE_BACKTEST_ROWS=%s\n' "$pre_backtest_rows" >> "$GITHUB_ENV"
+          printf 'PRE_WF_ROWS=%s\n' "$pre_wf_rows" >> "$GITHUB_ENV"
+          printf 'EXPECTED_POST_MIGRATIONS=%s\n' "$(IFS=,; printf '%s' "${expected_post_names[*]}")" >> "$GITHUB_ENV"
+
+      - name: Verify repository is private before creating a dump
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repository_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/engineiapt-ops/year95)"
+          repository_private="$(printf '%s' "$repository_json" | jq -er '.private')"
+          if [[ "$repository_private" != "true" ]]; then
+            echo "::error::Repository is public or its privacy could not be verified. Backup artifact would be exposed; aborting before dump."
+            exit 1
+          fi
+          echo "Repository privacy verified: private. Backup artifact may be uploaded with restricted repository access."
+
+      - name: Create and validate mandatory public-schema backup
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          export PGCONNECT_TIMEOUT=10
+          dump_file="$RUNNER_TEMP/year95-public.dump"
+          restore_list="$RUNNER_TEMP/year95-public-restore-list.txt"
+
+          dump_stderr="$RUNNER_TEMP/year95-pg-dump.stderr"
+          if ! "$PG_BIN_DIR/pg_dump" \
+            --dbname="$DATABASE_URL_MIGRATE" \
+            --schema=public \
+            --format=custom \
+            --file="$dump_file" 2>"$dump_stderr"; then
+            node --input-type=module - "$dump_stderr" "$RUNNER_TEMP/year95-pg-dump.redacted.stderr" <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const [inputPath, outputPath] = process.argv.slice(2);
+          let message = await readFile(inputPath, 'utf8');
+          const raw = process.env.DATABASE_URL_MIGRATE;
+          if (raw) {
+            message = message.split(raw).join('[REDACTED_DATABASE_URL]');
+            try {
+              const url = new URL(raw);
+              for (const value of [url.password, decodeURIComponent(url.password)]) {
+                if (value) message = message.split(value).join('[REDACTED_PASSWORD]');
+              }
+            } catch {}
+          }
+          message = message.replace(/postgres(?:ql)?:\/\/[^\s"'"`]+/gi, '[REDACTED_POSTGRES_URL]');
+          message = message.replace(/(password\s*[=:]\s*)\S+/gi, '$1[REDACTED_PASSWORD]');
+          await writeFile(outputPath, message);
+          NODE
+            cat "$RUNNER_TEMP/year95-pg-dump.redacted.stderr"
+            echo "::error::pg_dump failed. Production migrations will not run; connection details were redacted."
+            exit 1
+          fi
+
+          if [[ ! -s "$dump_file" ]]; then
+            echo "::error::Backup dump is missing or empty. Production migrations will not run."
+            exit 1
+          fi
+
+          "$PG_BIN_DIR/pg_restore" --list "$dump_file" > "$restore_list"
+          for table in benchmark_results backtest_runs walk_forward_folds; do
+            if ! grep -Eq "^[0-9]+; [0-9]+ [0-9]+ TABLE public ${table} " "$restore_list"; then
+              echo "::error::Validated dump does not list TABLE public ${table}. Production migrations will not run."
+              exit 1
+            fi
+            if ! grep -Eq "^[0-9]+; [0-9]+ [0-9]+ TABLE DATA public ${table} " "$restore_list"; then
+              echo "::error::Validated dump does not list TABLE DATA public ${table}. Production migrations will not run."
+              exit 1
+            fi
+          done
+
+          dump_bytes="$(stat --format='%s' "$dump_file")"
+          dump_sha256="$(sha256sum "$dump_file" | awk '{print $1}')"
+          dump_human="$(numfmt --to=iec-i --suffix=B "$dump_bytes")"
+          printf 'DUMP_BYTES=%s\n' "$dump_bytes" >> "$GITHUB_ENV"
+          printf 'DUMP_SHA256=%s\n' "$dump_sha256" >> "$GITHUB_ENV"
+          {
+            echo "## Backup validation"
+            echo
+            echo "- Scope: \`public\` schema, custom format, schema and data"
+            echo "- PostgreSQL server: \`$SERVER_VERSION\`"
+            echo "- Client: \`$PG_DUMP_VERSION\` (major version equal to or higher than server)"
+            echo "- Dump size: \`$dump_human ($dump_bytes bytes)\`"
+            echo "- SHA-256: \`$dump_sha256\`"
+            echo "- File non-empty: PASS"
+            echo "- \`pg_restore --list\`: PASS"
+            echo "- Required table and table-data entries (\`benchmark_results\`, \`backtest_runs\`, \`walk_forward_folds\`): PASS"
+            echo "- Artifact retention: 7 days; repository privacy was verified before dump creation."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload validated private backup artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: year95-production-public-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/year95-public.dump
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Apply pending migrations once with the official runner
+        id: migrate
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          runner_log="$RUNNER_TEMP/year95-migration-runner.log"
+          runner_safe_log="$RUNNER_TEMP/year95-migration-runner.redacted.log"
+
+          redact_runner_log() {
+            node --input-type=module - "$runner_log" "$runner_safe_log" <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const [inputPath, outputPath] = process.argv.slice(2);
+          let message = await readFile(inputPath, 'utf8');
+          for (const raw of [process.env.DATABASE_URL, process.env.DATABASE_URL_MIGRATE].filter(Boolean)) {
+            message = message.split(raw).join('[REDACTED_DATABASE_URL]');
+            try {
+              const url = new URL(raw);
+              for (const value of [url.password, decodeURIComponent(url.password)]) {
+                if (value) message = message.split(value).join('[REDACTED_PASSWORD]');
+              }
+            } catch {}
+          }
+          message = message.replace(/postgres(?:ql)?:\/\/[^\s"'"`]+/gi, '[REDACTED_POSTGRES_URL]');
+          message = message.replace(/(password\s*[=:]\s*)\S+/gi, '$1[REDACTED_PASSWORD]');
+          await writeFile(outputPath, message);
+          NODE
+          }
+
+          if pnpm --filter @year95/persistence migrate >"$runner_log" 2>&1; then
+            redact_runner_log
+            cat "$runner_safe_log"
+            {
+              echo "## Migration runner"
+              echo
+              echo "- Command executed exactly once: \`pnpm --filter @year95/persistence migrate\`"
+              echo "- Result: PASS"
+              echo "- Expected pending migrations: \`$EXPECTED_PENDING\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            runner_status=$?
+            redact_runner_log
+            cat "$runner_safe_log"
+            echo "::error::The official migration runner failed with exit code $runner_status. It will not be retried."
+            ledger_after_failure="$(
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=$'\t' \
+                --command='BEGIN READ ONLY; SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name; COMMIT;' 2>"$RUNNER_TEMP/year95-ledger-after-failure.err"
+            )" || ledger_after_failure="[unable to read ledger after runner failure]"
+            constraint_after_failure="$(
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align \
+                --command="BEGIN READ ONLY; SELECT pg_get_constraintdef(con.oid, true) FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'; COMMIT;" 2>"$RUNNER_TEMP/year95-constraint-after-failure.err"
+            )" || constraint_after_failure="[unable to read constraint after runner failure]"
+            counts_after_failure="$(
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=',' \
+                --command='BEGIN READ ONLY; SELECT (SELECT COUNT(*) FROM public.benchmark_results), (SELECT COUNT(*) FROM public.backtest_runs), (SELECT COUNT(*) FROM public.walk_forward_folds); COMMIT;' 2>"$RUNNER_TEMP/year95-counts-after-failure.err"
+            )" || counts_after_failure="[unable to read row counts after runner failure]"
+            identity_after_failure="$(
+              "$PG_BIN_DIR/psql" "$DATABASE_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=',' \
+                --command="BEGIN READ ONLY; SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL; COMMIT;" 2>"$RUNNER_TEMP/year95-identity-after-failure.err"
+            )" || identity_after_failure="[unable to read identity table state after runner failure]"
+            {
+              echo "## Migration runner failed"
+              echo
+              echo "- Exit code: $runner_status"
+              echo "- Retry: none"
+              echo "- Backup artifact: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              echo "- Constraint after failure: $constraint_after_failure"
+              echo "- Counts after failure (benchmark_results, backtest_runs, walk_forward_folds): $counts_after_failure"
+              echo "- Identity table existence after failure (allowed_emails, user_profiles): $identity_after_failure"
+              echo "- Current ledger after failure (name | checksum | origin):"
+              echo
+              echo ' ```text'
+              printf '%s\n' "$ledger_after_failure"
+              echo ' ```'
+              echo
+              echo "### Complete runner output (connection values redacted)"
+              echo
+              echo ' ```text'
+              cat "$runner_safe_log"
+              echo ' ```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$runner_status"
+          fi
+
+      - name: Verify production state after migrations
+        if: steps.migrate.outcome == 'success'
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          export PGCONNECT_TIMEOUT=10
+          readonly_query() {
+            local statement="$1"
+            "$PG_BIN_DIR/psql" "$DATABASE_URL_MIGRATE" \
+              --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --field-separator=$'\t' \
+              --command="BEGIN READ ONLY; ${statement}; COMMIT;"
+          }
+
+          ledger_after="$(readonly_query 'SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name')"
+          migration_rows="$(readonly_query "SELECT name, checksum, origin FROM public.schema_migrations WHERE origin = 'migration' ORDER BY name")"
+          actual_migration_names="$(printf '%s\n' "$migration_rows" | awk -F '\t' 'NF { print $1 }' | paste -sd, -)"
+          post_errors=()
+
+          if [[ "$actual_migration_names" != "$EXPECTED_POST_MIGRATIONS" ]]; then
+            post_errors+=("Migration ledger names differ from the expected complete migration set: $actual_migration_names")
+          fi
+
+          while IFS=$'\t' read -r name checksum origin; do
+            [[ -n "$name" ]] || continue
+            if [[ "$origin" != "migration" || ! -f "db/migrations/$name" ]]; then
+              post_errors+=("Unexpected migration ledger record: $name (origin=$origin)")
+              continue
+            fi
+            local_checksum="$(sha256sum -- "db/migrations/$name" | awk '{print $1}')"
+            if [[ "$checksum" != "$local_checksum" ]]; then
+              post_errors+=("Checksum mismatch after migration: $name")
+            fi
+          done <<< "$migration_rows"
+
+          constraint_row="$(readonly_query "SELECT con.contype::text || '|' || pg_get_constraintdef(con.oid, true) || '|' || con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
+          if [[ -z "$constraint_row" ]]; then
+            constraint_type="missing"
+            constraint_validated="false"
+            constraint_definition="missing"
+            post_errors+=("benchmark_results_estrategia_check is missing after migration")
+          else
+            IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+            if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" ||
+                  "$constraint_definition" != *"'baseline'::text"* ||
+                  "$constraint_definition" != *"'baseline_risk'::text"* ||
+                  "$constraint_definition" != *"'buyhold'::text"* ||
+                  "$constraint_definition" != *"'jev'::text"* ]]; then
+              post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
+            fi
+          fi
+          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
+          IFS=$'\t' read -r post_benchmark_rows post_backtest_rows post_wf_rows <<< "$counts"
+          if [[ "$post_benchmark_rows" != "$PRE_BENCHMARK_ROWS" ]]; then
+            post_errors+=("benchmark_results row count changed: before=$PRE_BENCHMARK_ROWS after=$post_benchmark_rows")
+          fi
+          if [[ "$post_backtest_rows" != "$PRE_BACKTEST_ROWS" ]]; then
+            post_errors+=("backtest_runs row count changed: before=$PRE_BACKTEST_ROWS after=$post_backtest_rows")
+          fi
+          if [[ "$post_wf_rows" != "$PRE_WF_ROWS" ]]; then
+            post_errors+=("walk_forward_folds row count changed: before=$PRE_WF_ROWS after=$post_wf_rows")
+          fi
+
+          identity_exists="$(readonly_query "SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL")"
+          IFS=$'\t' read -r allowed_emails_exists user_profiles_exists <<< "$identity_exists"
+          if [[ "$allowed_emails_exists" != "t" || "$user_profiles_exists" != "t" ]]; then
+            post_errors+=("Expected new identity tables are missing: allowed_emails=$allowed_emails_exists user_profiles=$user_profiles_exists")
+            allowed_emails_rows="not checked"
+            user_profiles_rows="not checked"
+          else
+            identity_counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.allowed_emails), (SELECT COUNT(*)::bigint FROM public.user_profiles)")"
+            IFS=$'\t' read -r allowed_emails_rows user_profiles_rows <<< "$identity_counts"
+            if [[ "$allowed_emails_rows" != "0" || "$user_profiles_rows" != "0" ]]; then
+              post_errors+=("New identity tables should be empty: allowed_emails=$allowed_emails_rows user_profiles=$user_profiles_rows")
+            fi
+          fi
+
+          {
+            echo "## Post-migration state"
+            echo
+            echo "- Migration runner result: PASS"
+            echo "- Migrations in ledger: \`$actual_migration_names\`"
+            echo "- Dump artifact size: \`$DUMP_BYTES bytes\`"
+            echo "- Dump SHA-256: \`$DUMP_SHA256\`"
+            echo "- Constraint after: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
+            echo "- Row counts after: \`benchmark_results=$post_benchmark_rows\`, \`backtest_runs=$post_backtest_rows\`, \`walk_forward_folds=$post_wf_rows\`"
+            echo "- New tables: \`allowed_emails=$allowed_emails_rows rows\`, \`user_profiles=$user_profiles_rows rows\`"
+            echo
+            echo "### Current ledger after migration (name | checksum | origin)"
+            echo
+            echo ' ```text'
+            printf '%s\n' "$ledger_after"
+            echo ' ```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( ${#post_errors[@]} > 0 )); then
+            echo "::error::Post-migration verification found ${#post_errors[@]} problem(s). No automatic correction was attempted."
+            for problem in "${post_errors[@]}"; do
+              echo "::error::$problem"
+            done
+            exit 1
+          fi
+
+          echo "Post-migration verification passed; canonical comparison remains a separate workflow."
