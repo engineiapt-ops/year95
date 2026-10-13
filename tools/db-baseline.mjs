@@ -45,12 +45,20 @@ async function main() {
   if (!indexCorrectionMigration) {
     throw new Error('Canonical index correction migration 028 is missing');
   }
+  const identityTablesMigration = plan.migrations.find(
+    ({ record }) => record.name === '027_add_identity_repository_tables.sql',
+  );
+  if (!identityTablesMigration) {
+    throw new Error('Expected identity table definition migration 027 is missing');
+  }
   const admin = new PsqlDatabaseClient({ connectionString, schemaName: 'public' });
   const suffix = randomUUID().replaceAll('-', '');
   const baselineSchema = 'year95_baseline_' + suffix;
   const referenceSchema = 'year95_reference_' + suffix;
+  const identitySchema = 'year95_identity_027_' + suffix;
   const baseline = new PsqlDatabaseClient({ connectionString, schemaName: baselineSchema });
   const reference = new PsqlDatabaseClient({ connectionString, schemaName: referenceSchema });
+  const identity = new PsqlDatabaseClient({ connectionString, schemaName: identitySchema });
   const baselineReadOnly = new PsqlDatabaseClient({
     connectionString,
     schemaName: baselineSchema,
@@ -59,6 +67,11 @@ async function main() {
   const referenceReadOnly = new PsqlDatabaseClient({
     connectionString,
     schemaName: referenceSchema,
+    readOnly: true,
+  });
+  const identityReadOnly = new PsqlDatabaseClient({
+    connectionString,
+    schemaName: identitySchema,
     readOnly: true,
   });
   const authState = await admin.queryRows(
@@ -80,6 +93,7 @@ async function main() {
     await admin.transaction([
       { sql: 'CREATE SCHEMA "' + baselineSchema + '"' },
       { sql: 'CREATE SCHEMA "' + referenceSchema + '"' },
+      { sql: 'CREATE SCHEMA "' + identitySchema + '"' },
     ]);
     schemasCreated = true;
     await reference.transaction([
@@ -87,6 +101,9 @@ async function main() {
       { sql: indexCorrectionMigration.sql },
     ]);
     await runMigrations(baseline, { plan });
+    // Apply only migration 027 in its own disposable schema: later migrations
+    // must not silently expand the version-1 identity-table comparison contract.
+    await identity.transaction([{ sql: identityTablesMigration.sql }]);
     const localComparison = await compareSchemaFingerprintsIgnoringTables(
       referenceReadOnly,
       baselineReadOnly,
@@ -132,7 +149,7 @@ async function main() {
       const [canonicalFingerprint, liveFingerprint, migration027Fingerprint] = await Promise.all([
         schemaFingerprint(referenceReadOnly, referenceSchema),
         schemaFingerprint(live, 'public'),
-        schemaFingerprint(baselineReadOnly, baselineSchema),
+        schemaFingerprint(identityReadOnly, identitySchema),
       ]);
       const comparison = compareLiveSchemaFingerprints(
         canonicalFingerprint,
@@ -170,6 +187,7 @@ async function main() {
       await admin.transaction([
         { sql: 'DROP SCHEMA "' + baselineSchema + '" CASCADE' },
         { sql: 'DROP SCHEMA "' + referenceSchema + '" CASCADE' },
+        { sql: 'DROP SCHEMA "' + identitySchema + '" CASCADE' },
       ]);
     }
     if (createdAuthUsersStub) await admin.transaction([{ sql: 'DROP TABLE auth.users' }]);
