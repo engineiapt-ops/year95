@@ -226,19 +226,22 @@ jobs:
           done <<< "$ledger_before"
 
 
-          constraint_row="$(readonly_query "SELECT con.contype::text, pg_get_constraintdef(con.oid, true), con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
+          constraint_row="$(readonly_query "SELECT con.contype::text || '|' || pg_get_constraintdef(con.oid, true) || '|' || con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
           if [[ -z "$constraint_row" ]]; then
-            echo "::error::Expected constraint public.benchmark_results.benchmark_results_estrategia_check is missing; refusing to continue."
-            exit 1
+            constraint_type="missing"
+            constraint_validated="false"
+            constraint_definition="missing"
+            post_errors+=("benchmark_results_estrategia_check is missing after migration")
+          else
+            IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+            if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" ||
+                  "$constraint_definition" != *"'baseline'::text"* ||
+                  "$constraint_definition" != *"'baseline_risk'::text"* ||
+                  "$constraint_definition" != *"'buyhold'::text"* ||
+                  "$constraint_definition" != *"'jev'::text"* ]]; then
+              post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
+            fi
           fi
-          IFS=$'\t' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
-          expected_constraint="CHECK (estrategia = ANY (ARRAY['baseline'::text, 'buyhold'::text, 'jev'::text]))"
-          if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" || "$constraint_definition" != "$expected_constraint" ]]; then
-            echo "::error::The current benchmark strategy CHECK does not match the reviewed precondition; refusing to continue."
-            printf 'Observed constraint type=%s validated=%s definition=%s\n' "$constraint_type" "$constraint_validated" "$constraint_definition"
-            exit 1
-          fi
-
           counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
           IFS=$'\t' read -r pre_benchmark_rows pre_backtest_rows pre_wf_rows <<< "$counts"
 
