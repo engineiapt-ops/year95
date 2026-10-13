@@ -31,9 +31,16 @@ describe('WebApiClient', () => {
       baseUrl: 'http://localhost:3000',
       getAccessToken: () => null,
       onUnauthorized: vi.fn(),
-      fetchImpl: async () => jsonResponse({
-        status: 'not_ready', ready: false, version: '0.1.0', checks: { database: 'not_ready' },
-      }, 503),
+      fetchImpl: async () =>
+        jsonResponse(
+          {
+            status: 'not_ready',
+            ready: false,
+            version: '0.1.0',
+            checks: { database: 'not_ready' },
+          },
+          503,
+        ),
     });
     await expect(client.getReadiness()).resolves.toMatchObject({ ready: false });
   });
@@ -44,9 +51,13 @@ describe('WebApiClient', () => {
       baseUrl: 'http://localhost:3000',
       getAccessToken: () => 'expired-access-token',
       onUnauthorized,
-      fetchImpl: async () => jsonResponse({
-        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired access token' },
-      }, 401),
+      fetchImpl: async () =>
+        jsonResponse(
+          {
+            error: { code: 'UNAUTHORIZED', message: 'Invalid or expired access token' },
+          },
+          401,
+        ),
     });
     await expect(client.getMe()).rejects.toMatchObject({ code: 'SESSION_EXPIRED', status: 401 });
     expect(onUnauthorized).toHaveBeenCalledOnce();
