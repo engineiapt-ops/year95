@@ -1,0 +1,40 @@
+name: API Docker
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "packages/config/**"
+      - "packages/contracts/**"
+      - "packages/persistence/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".dockerignore"
+      - ".github/workflows/api-docker.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/config/**"
+      - "packages/contracts/**"
+      - "packages/persistence/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".dockerignore"
+      - ".github/workflows/api-docker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build production API image
+        run: docker build --file apps/api/Dockerfile --tag year95-api:${{ github.sha }} .
