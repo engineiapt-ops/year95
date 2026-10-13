@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertLatestCandleFresh,
+  evaluateLatestCandleFreshness,
   InvalidMarketDataError,
   MarketDataStaleError,
+  maxMarketDataAgeMs,
   type MarketCandle,
 } from '@year95/market-data';
 import {
@@ -101,7 +104,7 @@ describe('Binance Spot adapter', () => {
 
     await expect(
       provider.getCandles({ symbol: 'ETHUSDT', timeframe: '1h' }),
-    ).rejects.toMatchObject<Partial<BinanceSpotProviderError>>({
+    ).rejects.toMatchObject({
       code: 'UNSUPPORTED_SYMBOL',
     });
     expect(callCount).toBe(0);
@@ -257,7 +260,13 @@ describe('Binance Spot adapter', () => {
 });
 
 describe('market data freshness contract', () => {
-  it('rejects a latest candle whose close is in the future', async () => {
+  it('preserves the legacy 1.5x freshness window for supported timeframes', () => {
+    expect(maxMarketDataAgeMs('1h')).toBe(90 * 60 * 1_000);
+    expect(maxMarketDataAgeMs('4h')).toBe(6 * 60 * 60 * 1_000);
+    expect(maxMarketDataAgeMs('1d')).toBe(36 * 60 * 60 * 1_000);
+  });
+
+  it('fails closed when the latest candle closes in the future', () => {
     const candle: MarketCandle = {
       openTime: new Date('2026-10-13T14:00:00.000Z'),
       closeTime: new Date('2026-10-13T14:01:00.000Z'),
@@ -267,19 +276,13 @@ describe('market data freshness contract', () => {
       close: 105,
       volume: 1,
     };
-    const provider = makeProvider(async () => jsonResponse([]));
+    const input = {
+      timeframe: '1h' as const,
+      latestCandle: candle,
+      checkedAt: new Date(checkedAtMs),
+    };
 
-    expect(() => {
-      const freshness = {
-        status: 'fresh' as const,
-        timeframe: '1h' as const,
-        checkedAt: new Date(checkedAtMs).toISOString(),
-        dataAsOf: candle.closeTime.toISOString(),
-        ageMs: checkedAtMs - candle.closeTime.getTime(),
-        maxAgeMs: 90 * 60 * 1_000,
-      };
-      return freshness;
-    }).toBeDefined();
-    expect(provider.id).toBe('binance-spot');
+    expect(() => evaluateLatestCandleFreshness(input)).toThrow(InvalidMarketDataError);
+    expect(() => assertLatestCandleFresh(input)).toThrow('Latest candle closes in the future');
   });
 });
