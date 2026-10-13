@@ -5,12 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "typecheck": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && tsc -p tsconfig.json --noEmit",
+    "typecheck": "pnpm --filter @year95/contracts build && tsc -p tsconfig.json --noEmit",
     "build": "pnpm run typecheck && vite build && node scripts/check-bundle-secrets.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",
-    "@year95/config": "workspace:*",
     "@year95/contracts": "workspace:*",
     "react": "19.1.1",
     "react-dom": "19.1.1",
