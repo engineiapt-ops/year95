@@ -206,3 +206,250 @@ export async function compareSchemaFingerprintsIgnoringTablesAndIndexes(
     filterKnownMissingObjects(actual),
   );
 }
+
+export type SchemaFingerprintCategory = keyof SchemaFingerprint;
+export type SchemaDifferenceType =
+  'extra in database' | 'missing in database' | 'definition different';
+
+export interface SchemaObjectDifference {
+  category: SchemaFingerprintCategory;
+  object: string;
+  differenceType: SchemaDifferenceType;
+  changedFields?: readonly string[];
+}
+
+/**
+ * Versioned, narrow live-schema allowance sourced from migration 027.
+ *
+ * Only these tables and their table/column/constraint/index objects may be an
+ * expected addition over the historical canonical baseline. Their live
+ * definitions are still compared with a fingerprint produced by applying
+ * db/migrations/027_add_identity_repository_tables.sql. Triggers are not
+ * excluded; any trigger difference remains unexpected.
+ */
+export const EXPECTED_LIVE_SCHEMA_VARIATIONS_V1 = Object.freeze({
+  name: 'identity-repository-tables',
+  version: 1,
+  source: 'db/migrations/027_add_identity_repository_tables.sql',
+  tables: ['allowed_emails', 'user_profiles'] as const,
+  categories: ['tables', 'columns', 'constraints', 'indexes'] as const,
+});
+
+export interface LiveSchemaDifferenceReport {
+  policy: {
+    name: string;
+    version: number;
+    source: string;
+    tables: readonly string[];
+  };
+  expected: readonly SchemaObjectDifference[];
+  unexpected: readonly SchemaObjectDifference[];
+  expectedCount: number;
+  unexpectedCount: number;
+  equivalent: boolean;
+}
+
+const SCHEMA_FINGERPRINT_CATEGORIES: readonly SchemaFingerprintCategory[] = [
+  'tables',
+  'columns',
+  'constraints',
+  'indexes',
+  'triggers',
+];
+
+const OBJECT_KEY_FIELDS: Record<SchemaFingerprintCategory, readonly string[]> = {
+  tables: ['table_name'],
+  columns: ['table_name', 'column_name'],
+  constraints: ['table_name', 'constraint_name'],
+  indexes: ['table_name', 'index_name'],
+  triggers: ['table_name', 'trigger_name'],
+};
+
+function getObjectKey(category: SchemaFingerprintCategory, row: Record<string, unknown>): string {
+  return OBJECT_KEY_FIELDS[category].map((field) => String(row[field] ?? '<missing>')).join('.');
+}
+
+function getObjectLabel(category: SchemaFingerprintCategory, row: Record<string, unknown>): string {
+  return OBJECT_KEY_FIELDS[category].map((field) => String(row[field] ?? '<missing>')).join('.');
+}
+
+function sameFingerprintValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function changedFields(
+  category: SchemaFingerprintCategory,
+  expected: Record<string, unknown>,
+  actual: Record<string, unknown>,
+): string[] {
+  const identityFields = new Set(OBJECT_KEY_FIELDS[category]);
+  const fields = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+  return [...fields]
+    .filter((field) => !identityFields.has(field))
+    .filter((field) => !sameFingerprintValue(expected[field], actual[field]))
+    .sort();
+}
+
+function diffCategoryObjects(
+  category: SchemaFingerprintCategory,
+  expectedRows: readonly Record<string, unknown>[],
+  actualRows: readonly Record<string, unknown>[],
+): SchemaObjectDifference[] {
+  const expectedByKey = new Map(expectedRows.map((row) => [getObjectKey(category, row), row]));
+  const actualByKey = new Map(actualRows.map((row) => [getObjectKey(category, row), row]));
+  const differences: SchemaObjectDifference[] = [];
+
+  for (const [key, expected] of expectedByKey) {
+    const actual = actualByKey.get(key);
+    if (!actual) {
+      differences.push({
+        category,
+        object: getObjectLabel(category, expected),
+        differenceType: 'missing in database',
+      });
+      continue;
+    }
+    const fields = changedFields(category, expected, actual);
+    if (fields.length > 0) {
+      differences.push({
+        category,
+        object: getObjectLabel(category, actual),
+        differenceType: 'definition different',
+        changedFields: fields,
+      });
+    }
+  }
+
+  for (const [key, actual] of actualByKey) {
+    if (!expectedByKey.has(key)) {
+      differences.push({
+        category,
+        object: getObjectLabel(category, actual),
+        differenceType: 'extra in database',
+      });
+    }
+  }
+
+  return differences.sort(
+    (left, right) =>
+      left.object.localeCompare(right.object) ||
+      left.differenceType.localeCompare(right.differenceType),
+  );
+}
+
+function filterFingerprint(
+  fingerprint: SchemaFingerprint,
+  keepRow: (category: SchemaFingerprintCategory, row: Record<string, unknown>) => boolean,
+): SchemaFingerprint {
+  return {
+    tables: fingerprint.tables.filter((row) => keepRow('tables', row)),
+    columns: fingerprint.columns.filter((row) => keepRow('columns', row)),
+    constraints: fingerprint.constraints.filter((row) => keepRow('constraints', row)),
+    indexes: fingerprint.indexes.filter((row) => keepRow('indexes', row)),
+    triggers: fingerprint.triggers.filter((row) => keepRow('triggers', row)),
+  };
+}
+
+function collectFingerprintDifferences(
+  expected: SchemaFingerprint,
+  actual: SchemaFingerprint,
+): SchemaObjectDifference[] {
+  return SCHEMA_FINGERPRINT_CATEGORIES.flatMap((category) =>
+    diffCategoryObjects(category, expected[category], actual[category]),
+  );
+}
+
+/**
+ * Compares the canonical live schema while accepting only the exact additions
+ * produced by migration 027. The migration-derived identity fingerprint must be
+ * supplied separately so definition drift in either identity table still fails.
+ */
+export function compareLiveSchemaFingerprints(
+  canonicalExpected: SchemaFingerprint,
+  liveActual: SchemaFingerprint,
+  migration027Expected: SchemaFingerprint,
+): LiveSchemaDifferenceReport {
+  const identityTables = new Set<string>(EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.tables);
+  const expectedCategories = new Set<SchemaFingerprintCategory>(
+    EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.categories,
+  );
+
+  // Keep the existing canonical comparison exact for all non-identity objects.
+  // Triggers are deliberately never filtered, even when attached to an identity table.
+  const canonicalExpectedFiltered = filterFingerprint(
+    canonicalExpected,
+    (category, row) => category === 'triggers' || !identityTables.has(String(row.table_name ?? '')),
+  );
+  const liveActualFiltered = filterFingerprint(
+    liveActual,
+    (category, row) => category === 'triggers' || !identityTables.has(String(row.table_name ?? '')),
+  );
+  const unexpected: SchemaObjectDifference[] = collectFingerprintDifferences(
+    canonicalExpectedFiltered,
+    liveActualFiltered,
+  );
+
+  // Treat migration 027 itself as the source of truth for the two expected tables.
+  // This detects missing tables/columns/constraints/indexes and any definition drift.
+  const identityExpected = filterFingerprint(
+    migration027Expected,
+    (category, row) =>
+      expectedCategories.has(category) && identityTables.has(String(row.table_name ?? '')),
+  );
+  const identityActual = filterFingerprint(
+    liveActual,
+    (category, row) =>
+      expectedCategories.has(category) && identityTables.has(String(row.table_name ?? '')),
+  );
+  const identityDifferences = collectFingerprintDifferences(identityExpected, identityActual);
+  unexpected.push(...identityDifferences);
+
+  // An object is EXPECTED only if it is part of migration 027's fingerprint and
+  // exists in production with the exact same definition. No values from rows or
+  // definitions are copied into this report; only object names and changed fields.
+  const expected: SchemaObjectDifference[] = [];
+  for (const category of EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.categories) {
+    const canonicalRows = canonicalExpected[category];
+    const canonicalKeys = new Set(canonicalRows.map((row) => getObjectKey(category, row)));
+    const templateRows = identityExpected[category];
+    const liveRows = new Map(liveActual[category].map((row) => [getObjectKey(category, row), row]));
+
+    for (const template of templateRows) {
+      const key = getObjectKey(category, template);
+      if (canonicalKeys.has(key)) continue;
+      const actual = liveRows.get(key);
+      if (!actual) continue;
+      if (changedFields(category, template, actual).length > 0) continue;
+      expected.push({
+        category,
+        object: getObjectLabel(category, actual),
+        differenceType: 'extra in database',
+      });
+    }
+  }
+
+  expected.sort(
+    (left, right) =>
+      left.category.localeCompare(right.category) || left.object.localeCompare(right.object),
+  );
+  unexpected.sort(
+    (left, right) =>
+      left.category.localeCompare(right.category) ||
+      left.object.localeCompare(right.object) ||
+      left.differenceType.localeCompare(right.differenceType),
+  );
+
+  return {
+    policy: {
+      name: EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.name,
+      version: EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.version,
+      source: EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.source,
+      tables: EXPECTED_LIVE_SCHEMA_VARIATIONS_V1.tables,
+    },
+    expected,
+    unexpected,
+    expectedCount: expected.length,
+    unexpectedCount: unexpected.length,
+    equivalent: unexpected.length === 0,
+  };
+}
