@@ -137,7 +137,10 @@ async function compareExisting(
 function assertComparisonEquivalent(result: SchemaComparison): void {
   if (!result.equivalent) {
     const details = result.differences?.length ? ': ' + result.differences.join('; ') : '';
-    throw new Error('Existing database does not match db/baseline/schema.sql (canonical schema plus forward migrations)' + details);
+    throw new Error(
+      'Existing database does not match db/baseline/schema.sql (canonical schema plus forward migrations)' +
+        details,
+    );
   }
 }
 async function assertEquivalent(
