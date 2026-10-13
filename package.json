@@ -27,7 +27,8 @@
     "format:check": "prettier . --check",
     "check:migrations": "node tools/check-migrations.mjs",
     "verify:arch": "node scripts/verify-architecture.mjs",
-    "db:baseline": "pnpm --filter @year95/contracts build && pnpm --filter @year95/persistence build && node tools/db-baseline.mjs"
+    "db:baseline": "pnpm --filter @year95/contracts build && pnpm --filter @year95/persistence build && node tools/db-baseline.mjs",
+    "test:component": "vitest --project component run"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

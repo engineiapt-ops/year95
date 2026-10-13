@@ -79,6 +79,13 @@ export const readyResponseSchema = z.object({
 
 export type ReadyResponse = z.infer<typeof readyResponseSchema>;
 
+export const meResponseSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+});
+
+export type MeResponse = z.infer<typeof meResponseSchema>;
+
 export interface Clock {
   now(): Date;
 }
