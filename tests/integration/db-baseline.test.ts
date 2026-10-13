@@ -675,11 +675,7 @@ integrationTest(
 
       const before = await target.queryRows<{ indexname: string }>(
         'SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname IN ($2, $3) ORDER BY indexname',
-        [
-          targetSchema,
-          'idx_backtest_runs_oos_validation',
-          'idx_wf_folds_strategy_run',
-        ],
+        [targetSchema, 'idx_backtest_runs_oos_validation', 'idx_wf_folds_strategy_run'],
       );
       expect(before).toEqual([]);
 
@@ -688,11 +684,7 @@ integrationTest(
 
       const after = await target.queryRows<{ indexname: string }>(
         'SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname IN ($2, $3) ORDER BY indexname',
-        [
-          targetSchema,
-          'idx_backtest_runs_oos_validation',
-          'idx_wf_folds_strategy_run',
-        ],
+        [targetSchema, 'idx_backtest_runs_oos_validation', 'idx_wf_folds_strategy_run'],
       );
       expect(after.map((row) => row.indexname)).toEqual([
         'idx_backtest_runs_oos_validation',
