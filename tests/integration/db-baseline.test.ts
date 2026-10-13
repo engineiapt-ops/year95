@@ -25,15 +25,17 @@ import {
 const connectionString = process.env.DATABASE_URL?.trim();
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const schemaSql = await readFile(path.join(rootDir, 'db/baseline/schema.sql'), 'utf8');
-const schemaCorrectionsSql = await readFile(
-  path.join(rootDir, 'db/baseline/schema-corrections.sql'),
-  'utf8',
+const plan = await loadMigrationPlan(rootDir);
+const indexCorrectionMigration = plan.migrations.find(
+  ({ record }) => record.name === '028_reconcile_historical_indexes.sql',
 );
+if (!indexCorrectionMigration) {
+  throw new Error('Canonical index correction migration 028 is missing');
+}
 const canonicalSchemaStatements: SqlStatement[] = [
   { sql: schemaSql },
-  { sql: schemaCorrectionsSql },
+  { sql: indexCorrectionMigration.sql },
 ];
-const plan = await loadMigrationPlan(rootDir);
 const integrationTest = test.skipIf(!connectionString);
 
 async function createSchema(admin: PsqlDatabaseClient, schemaName: string): Promise<void> {
@@ -181,7 +183,7 @@ integrationTest(
       const applied = await target.queryRows<{ name: string; origin: string }>(
         'SELECT name, origin FROM schema_migrations ORDER BY name',
       );
-      expect(applied.filter((row) => row.origin === 'baseline')).toHaveLength(25);
+      expect(applied.filter((row) => row.origin === 'baseline')).toHaveLength(24);
       expect(applied.filter((row) => row.origin === 'migration')).toEqual([
         { name: '024_add_instruments.sql', origin: 'migration' },
         { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
@@ -448,7 +450,7 @@ integrationTest(
 );
 
 integrationTest(
-  'canonical baseline includes historical indexes and final effects of migrations 007-009, 011, and 022-023',
+  'canonical schema plus migration 028 includes historical indexes and final effects of migrations 007-009, 011, and 022-023',
   async () => {
     await withSchemas(async (_admin, target, _reference, targetSchema) => {
       await target.transaction(canonicalSchemaStatements);
@@ -656,7 +658,69 @@ integrationTest(
   },
 );
 
-integrationTest('empty database baseline equals canonical schema plus corrections', async () => {
+integrationTest(
+  'forward migration 028 repairs indexes missing from an initialized pre-correction database',
+  async () => {
+    await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
+      const previousPlan = {
+        ...plan,
+        migrations: plan.migrations.filter(
+          ({ record }) => record.name !== '028_reconcile_historical_indexes.sql',
+        ),
+        allRecords: plan.allRecords.filter(
+          ({ name }) => name !== '028_reconcile_historical_indexes.sql',
+        ),
+      };
+      await runMigrations(target, { plan: previousPlan });
+
+      const before = await target.queryRows<{ indexname: string }>(
+        'SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname IN ($2, $3) ORDER BY indexname',
+        [
+          targetSchema,
+          'idx_backtest_runs_oos_validation',
+          'idx_wf_folds_strategy_run',
+        ],
+      );
+      expect(before).toEqual([]);
+
+      await reference.transaction(canonicalSchemaStatements);
+      await runMigrations(target, { plan });
+
+      const after = await target.queryRows<{ indexname: string }>(
+        'SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname IN ($2, $3) ORDER BY indexname',
+        [
+          targetSchema,
+          'idx_backtest_runs_oos_validation',
+          'idx_wf_folds_strategy_run',
+        ],
+      );
+      expect(after.map((row) => row.indexname)).toEqual([
+        'idx_backtest_runs_oos_validation',
+        'idx_wf_folds_strategy_run',
+      ]);
+
+      const correctionRecord = await target.queryRows<{ name: string; origin: string }>(
+        'SELECT name, origin FROM schema_migrations WHERE name = $1',
+        ['028_reconcile_historical_indexes.sql'],
+      );
+      expect(correctionRecord).toEqual([
+        { name: '028_reconcile_historical_indexes.sql', origin: 'migration' },
+      ]);
+
+      const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
+        reference,
+        target,
+        referenceSchema,
+        targetSchema,
+        ['allowed_emails', 'user_profiles'],
+        [],
+      );
+      expect(comparison.equivalent, comparison.differences.join(', ')).toBe(true);
+    });
+  },
+);
+
+integrationTest('empty database baseline equals schema.sql plus forward migrations', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
     await reference.transaction(canonicalSchemaStatements);
     await runMigrations(target, { plan });
@@ -672,7 +736,7 @@ integrationTest('empty database baseline equals canonical schema plus correction
     const rows = await target.queryRows<{ name: string; origin: string }>(
       'SELECT name, origin FROM schema_migrations ORDER BY name',
     );
-    expect(rows.filter((row) => row.origin === 'baseline')).toHaveLength(25);
+    expect(rows.filter((row) => row.origin === 'baseline')).toHaveLength(24);
   });
 });
 
@@ -736,7 +800,7 @@ integrationTest('refuses to mark an existing database when schema comparison fai
           return { equivalent: result.equivalent, differences: result.differences };
         },
       }),
-    ).rejects.toThrow(/does not match the canonical baseline schema/i);
+    ).rejects.toThrow(/does not match db\/baseline\/schema\.sql/i);
     const tracker = await target.queryRows<{ exists: boolean }>(
       "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'schema_migrations') AS exists",
       [targetSchema],
