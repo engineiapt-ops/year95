@@ -104,12 +104,14 @@ const migration027Identity: SchemaFingerprint = {
     {
       table_name: 'allowed_emails',
       index_name: 'allowed_emails_pkey',
-      definition: 'CREATE UNIQUE INDEX allowed_emails_pkey ON $SCHEMA.allowed_emails USING btree (email)',
+      definition:
+        'CREATE UNIQUE INDEX allowed_emails_pkey ON $SCHEMA.allowed_emails USING btree (email)',
     },
     {
       table_name: 'user_profiles',
       index_name: 'user_profiles_pkey',
-      definition: 'CREATE UNIQUE INDEX user_profiles_pkey ON $SCHEMA.user_profiles USING btree (user_id)',
+      definition:
+        'CREATE UNIQUE INDEX user_profiles_pkey ON $SCHEMA.user_profiles USING btree (user_id)',
     },
   ],
   triggers: [],
@@ -125,10 +127,7 @@ function withIdentityTables(): SchemaFingerprint {
   };
 }
 
-function removeIdentityTable(
-  fingerprint: SchemaFingerprint,
-  tableName: string,
-): SchemaFingerprint {
+function removeIdentityTable(fingerprint: SchemaFingerprint, tableName: string): SchemaFingerprint {
   const retain = (rows: readonly Record<string, unknown>[]) =>
     rows.filter((row) => row.table_name !== tableName);
   return {
@@ -215,7 +214,10 @@ describe('live schema object-level comparison', () => {
     const live = withIdentityTables();
     live.constraints = live.constraints.map((row) =>
       row.constraint_name === 'user_profiles_user_id_fkey'
-        ? { ...row, definition: 'FOREIGN KEY (user_id) REFERENCES auth.other_users(id) ON DELETE CASCADE' }
+        ? {
+            ...row,
+            definition: 'FOREIGN KEY (user_id) REFERENCES auth.other_users(id) ON DELETE CASCADE',
+          }
         : row,
     );
 
