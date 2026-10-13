@@ -35,11 +35,14 @@ describe('forward-only migration metadata', () => {
       ),
     ).toThrow(/unknown applied migration/i);
   });
-  test('loads canonical schema plus 23 immutable historical migration checksums', async () => {
+  test('loads canonical schema corrections plus 23 immutable historical migration checksums', async () => {
     const plan = await loadMigrationPlan(rootDir);
-    expect(plan.baselineRecords).toHaveLength(24);
+    expect(plan.baselineRecords).toHaveLength(25);
     expect(plan.baselineRecords[0]?.name).toBe('schema.sql');
-    const historical = plan.baselineRecords.slice(1);
+    expect(plan.baselineRecords[1]?.name).toBe('schema-corrections.sql');
+    expect(plan.baselineCorrectionsSql).toContain('idx_backtest_runs_oos_validation');
+    expect(plan.baselineCorrectionsSql).toContain('idx_wf_folds_strategy_run');
+    const historical = plan.baselineRecords.slice(2);
     expect(historical).toHaveLength(23);
     historical.forEach((record, index) => {
       expect(record.name.startsWith(String(index + 1).padStart(3, '0') + '_')).toBe(true);
