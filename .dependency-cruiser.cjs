@@ -3,73 +3,52 @@
 module.exports = {
   forbidden: [
     {
-      name: "domain-no-dependencies",
-      severity: "error",
-      from: { path: "^packages/domain(/|$)" },
-      to: {
-        path: "^(apps|packages)/",
-        pathNot: "^packages/domain(/|$)"
-      }
+      name: 'domain-no-dependencies',
+      severity: 'error',
+      from: { path: '^packages/domain(/|$)' },
+      to: { path: '^(apps|packages)/', pathNot: '^packages/domain(/|$)' },
     },
     {
-      name: "quant-only-domain-contracts",
-      severity: "error",
-      from: { path: "^packages/quant(/|$)" },
+      name: 'quant-risk-decision-only-domain-contracts',
+      severity: 'error',
+      from: { path: '^packages/(quant|risk|decision)(/|$)' },
       to: {
-        path: "^packages/",
-        pathNot: "^packages/(domain|contracts)(/|$)"
-      }
-    },
-    {
-      name: "risk-only-domain-contracts",
-      severity: "error",
-      from: { path: "^packages/risk(/|$)" },
-      to: {
-        path: "^packages/",
-        pathNot: "^packages/(domain|contracts)(/|$)"
-      }
-    },
-    {
-      name: "decision-only-domain-contracts",
-      severity: "error",
-      from: { path: "^packages/decision(/|$)" },
-      to: {
-        path: "^packages/",
-        pathNot: "^packages/(domain|contracts)(/|$)"
-      }
-    },
-    {
-      name: "transport-only-persistence-providers",
-      severity: "error",
-      from: {
-        path: "^(apps|packages)/",
-        pathNot: "^(packages/(persistence|providers)(/|$))"
+        path: '^packages/',
+        pathNot: '^packages/(domain|contracts|quant|risk|decision)(/|$)',
       },
-      to: {
-        path: "^(node:(http|https)|http|https|pg|@supabase/|axios|undici)(/|$)"
-      }
     },
     {
-      name: "apps-do-not-import-apps",
-      severity: "error",
-      from: { path: "^apps/([^/]+)(/|$)" },
-      to: { path: "^apps/" }
+      name: 'transport-only-persistence-providers',
+      severity: 'error',
+      from: {
+        path: '^(apps|packages)/',
+        pathNot: '^(packages/(persistence|providers)(/|$)|apps/[^/]+/tests(/|$))',
+      },
+      to: { path: '^(node:(http|https)|http|https|pg|@supabase/|axios|undici)(/|$)' },
     },
     {
-      name: "no-vercel-imports",
-      severity: "error",
+      name: 'apps-do-not-import-apps',
+      severity: 'error',
+      from: { path: '^apps/([^/]+)/' },
+      to: { path: '^apps/', pathNot: '^apps/$1/' },
+    },
+    {
+      name: 'no-vercel-imports',
+      severity: 'error',
       from: {},
-      to: { path: "^@vercel/" }
-    }
+      to: { path: '^@vercel/' },
+    },
+    {
+      name: 'no-circular',
+      severity: 'error',
+      from: {},
+      to: { circular: true },
+    },
   ],
   options: {
-    doNotFollow: {
-      path: "node_modules"
-    },
+    doNotFollow: { path: 'node_modules' },
     tsPreCompilationDeps: true,
-    tsConfig: {
-      fileName: "tsconfig.base.json"
-    },
-    exclude: "node_modules"
-  }
+    tsConfig: { fileName: 'tsconfig.base.json' },
+    exclude: 'node_modules',
+  },
 };

@@ -1,18 +1,21 @@
 import type {
-  AllowlistRepository, HealthRepository, Instrument, InstrumentRepository,
-} from "@year95/contracts";
-import type { PgQueryable } from "./pg-pool.js";
+  AllowlistRepository,
+  HealthRepository,
+  Instrument,
+  InstrumentRepository,
+} from '@year95/contracts';
+import type { PgQueryable } from './pg-pool.js';
 
 interface InstrumentRow {
   symbol: string;
   display_name: string;
-  asset_class: Instrument["assetType"];
-  venue: Instrument["venue"];
+  asset_class: Instrument['assetType'];
+  venue: Instrument['venue'];
   base_currency: string;
   quote_currency: string;
   enabled: boolean;
   data_provider: string;
-  metadata_status: Instrument["metadataStatus"];
+  metadata_status: Instrument['metadataStatus'];
   metadata_source: string;
   min_order_size: string | null;
   max_order_size: string | null;
@@ -25,13 +28,24 @@ interface InstrumentRow {
 }
 function mapInstrument(row: InstrumentRow): Instrument {
   return {
-    symbol: row.symbol, displayName: row.display_name, assetType: row.asset_class,
-    venue: row.venue, baseCurrency: row.base_currency, quoteCurrency: row.quote_currency,
-    enabled: row.enabled, dataProvider: row.data_provider, metadataStatus: row.metadata_status,
-    metadataSource: row.metadata_source, minOrderSize: row.min_order_size,
-    maxOrderSize: row.max_order_size, leverage: row.leverage, marginPercent: row.margin_percent,
-    spread: row.spread, overnightFinancing: row.overnight_financing,
-    commission: row.commission, tradingHours: row.trading_hours,
+    symbol: row.symbol,
+    displayName: row.display_name,
+    assetType: row.asset_class,
+    venue: row.venue,
+    baseCurrency: row.base_currency,
+    quoteCurrency: row.quote_currency,
+    enabled: row.enabled,
+    dataProvider: row.data_provider,
+    metadataStatus: row.metadata_status,
+    metadataSource: row.metadata_source,
+    minOrderSize: row.min_order_size,
+    maxOrderSize: row.max_order_size,
+    leverage: row.leverage,
+    marginPercent: row.margin_percent,
+    spread: row.spread,
+    overnightFinancing: row.overnight_financing,
+    commission: row.commission,
+    tradingHours: row.trading_hours,
   };
 }
 const instrumentColumns = `symbol, display_name, asset_class, venue, base_currency, quote_currency,
@@ -48,7 +62,8 @@ export class PgInstrumentRepository implements InstrumentRepository {
   }
   async findBySymbol(symbol: string): Promise<Instrument | null> {
     const result = await this.db.query<InstrumentRow>(
-      `SELECT ${instrumentColumns} FROM public.instruments WHERE symbol = $1 LIMIT 1`, [symbol],
+      `SELECT ${instrumentColumns} FROM public.instruments WHERE symbol = $1 LIMIT 1`,
+      [symbol],
     );
     const row = result.rows[0];
     return row ? mapInstrument(row) : null;
@@ -61,7 +76,7 @@ export class PgAllowlistRepository implements AllowlistRepository {
     const normalized = email.trim().toLowerCase();
     if (!normalized) return false;
     const result = await this.db.query<{ allowed: boolean }>(
-      "SELECT EXISTS (SELECT 1 FROM public.allowed_emails WHERE email = $1) AS allowed",
+      'SELECT EXISTS (SELECT 1 FROM public.allowed_emails WHERE email = $1) AS allowed',
       [normalized],
     );
     return result.rows[0]?.allowed === true;
@@ -72,7 +87,7 @@ export class PgHealthRepository implements HealthRepository {
   constructor(private readonly db: PgQueryable) {}
   async isDatabaseReady(): Promise<boolean> {
     try {
-      await this.db.query("SELECT 1");
+      await this.db.query('SELECT 1');
       return true;
     } catch {
       return false;

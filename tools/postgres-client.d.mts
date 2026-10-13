@@ -1,4 +1,8 @@
-import type { MigrationDatabase, SqlStatement, SqlValue } from '../packages/persistence/src/migrate.js';
+import type {
+  MigrationDatabase,
+  SqlStatement,
+  SqlValue,
+} from '../packages/persistence/src/migrate.js';
 
 export declare class PsqlDatabaseClient implements MigrationDatabase {
   constructor(options: { connectionString: string; schemaName?: string; readOnly?: boolean });

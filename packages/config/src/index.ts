@@ -1,27 +1,24 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export type ConfigEnv = Readonly<Record<string, string | undefined>>;
 
 export const PUBLIC_ENV_NAMES = [
-  "VITE_API_BASE_URL",
-  "VITE_SUPABASE_URL",
-  "VITE_SUPABASE_ANON_KEY",
+  'VITE_API_BASE_URL',
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
 ] as const;
 
 export const SECRET_ENV_NAMES = [
-  "SUPABASE_SECRET_KEY",
-  "GEMINI_API_KEY",
-  "CRON_SECRET",
-  "IG_API_KEY",
-  "IG_USERNAME",
-  "IG_PASSWORD",
-  "SAXO_CLIENT_ID",
-  "SAXO_CLIENT_SECRET",
-  "SAXO_ACCESS_TOKEN",
-  "GOOGLE_API_KEY",
-  "AI_GATEWAY_API_KEY",
-  "CRYPTOPANIC_API_KEY",
-  "VERCEL_OIDC_TOKEN",
+  'DATABASE_URL',
+  'GEMINI_API_KEY',
+  'IG_API_KEY',
+  'IG_USERNAME',
+  'IG_PASSWORD',
+  'SAXO_CLIENT_ID',
+  'SAXO_CLIENT_SECRET',
+  'SAXO_ACCESS_TOKEN',
+  'GOOGLE_API_KEY',
+  'CRYPTOPANIC_API_KEY',
 ] as const;
 
 const secretKeys = new Set<string>(SECRET_ENV_NAMES);
@@ -29,17 +26,41 @@ const publicKeys = new Set<string>(PUBLIC_ENV_NAMES);
 
 const envText = z.string().trim().min(1);
 const urlText = envText.url();
+const emptyToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+const optionalEnvText = z.preprocess(emptyToUndefined, envText.optional());
+const optionalUrlText = z.preprocess(emptyToUndefined, urlText.optional());
 
-const nodeEnv = z.enum(["development", "test", "production"]).default("development");
-const logLevel = z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info");
+export class Secret {
+  readonly #value: string;
 
-const booleanText = z.preprocess((value) => {
-  if (typeof value !== "string") return value;
-  const normalized = value.trim().toLowerCase();
-  if (["true", "1", "yes", "on"].includes(normalized)) return true;
-  if (["false", "0", "no", "off"].includes(normalized)) return false;
-  return value;
-}, z.boolean());
+  constructor(value: string) {
+    this.#value = value;
+    Object.freeze(this);
+  }
+
+  reveal(): string {
+    return this.#value;
+  }
+
+  toString(): string {
+    return '[REDACTED]';
+  }
+
+  toJSON(): string {
+    return '[REDACTED]';
+  }
+
+  [Symbol.for('nodejs.util.inspect.custom')](): string {
+    return '[REDACTED]';
+  }
+}
+
+const secretText = envText.transform((value) => new Secret(value));
+const optionalSecretText = z.preprocess(emptyToUndefined, secretText.optional());
+
+const nodeEnv = z.enum(['development', 'test', 'production']).default('development');
+const logLevel = z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info');
 
 const baseRuntimeSchema = z.object({
   NODE_ENV: nodeEnv,
@@ -48,38 +69,51 @@ const baseRuntimeSchema = z.object({
 });
 
 const quantitativeSchema = {
-  DECISION_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.68),
-  DECISION_MIN_PROBABILIDADE: z.coerce.number().min(0).max(1).default(0.62),
-  DECISION_BLOQUEAR_RISCO_ELEVADO: booleanText.default(true),
-  FIXED_POSITION_PCT: z.coerce.number().min(0).max(100).default(1.5),
+  POSITION_NOTIONAL_BASE_PCT: z.coerce.number().min(0).max(100).default(1.5),
+  RISK_PER_TRADE_PCT_DEFAULT: z.coerce.number().min(0).max(1).default(0.5),
+  RISK_PER_TRADE_PCT_MAX: z.coerce.number().min(0).max(1).default(1),
 };
 
 export const apiConfigSchema = baseRuntimeSchema.extend({
-  BINANCE_BASE_URL: urlText.default("https://api.binance.com"),
-  SUPABASE_URL: urlText.optional(),
-  SUPABASE_SECRET_KEY: envText.optional(),
-  SUPABASE_JWT_ISSUER: urlText.optional(),
-  SUPABASE_JWT_AUDIENCE: envText.default("authenticated"),
+  BINANCE_BASE_URL: urlText.default('https://api.binance.com'),
+  DATABASE_URL: optionalSecretText,
+  DATABASE_CA_CERT_PEM: optionalEnvText,
+  SUPABASE_URL: optionalUrlText,
+  SUPABASE_JWKS_URL: optionalUrlText,
+  SUPABASE_JWT_ISSUER: optionalUrlText,
+  SUPABASE_JWT_AUDIENCE: envText.default('authenticated'),
   SUPABASE_JWT_CLOCK_TOLERANCE_SECONDS: z.coerce.number().int().min(0).max(60).default(5),
   SUPABASE_JWKS_CACHE_MAX_AGE_MS: z.coerce.number().int().min(1000).max(3600000).default(300000),
-  GEMINI_API_KEY: envText.optional(),
-  CRON_SECRET: envText.optional(),
+  GEMINI_API_KEY: optionalSecretText,
+  CORS_ORIGINS: z.preprocess(
+    (value) =>
+      typeof value === 'string'
+        ? value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : value,
+    z.array(urlText).default([]),
+  ),
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(10000).default(120),
+  RATE_LIMIT_HEAVY_MAX: z.coerce.number().int().min(1).max(10000).default(20),
   ...quantitativeSchema,
 });
 
 export const workerConfigSchema = baseRuntimeSchema.extend({
-  BINANCE_BASE_URL: urlText.default("https://api.binance.com"),
-  SUPABASE_URL: urlText.optional(),
-  SUPABASE_SECRET_KEY: envText.optional(),
-  GEMINI_API_KEY: envText.optional(),
+  BINANCE_BASE_URL: urlText.default('https://api.binance.com'),
+  DATABASE_URL: optionalSecretText,
+  DATABASE_CA_CERT_PEM: optionalEnvText,
+  SUPABASE_URL: optionalUrlText,
+  GEMINI_API_KEY: optionalSecretText,
   ...quantitativeSchema,
 });
 
 export const webPublicConfigSchema = z.object({
   NODE_ENV: nodeEnv,
-  VITE_API_BASE_URL: urlText.optional(),
-  VITE_SUPABASE_URL: urlText.optional(),
-  VITE_SUPABASE_ANON_KEY: envText.optional(),
+  VITE_API_BASE_URL: optionalUrlText,
+  VITE_SUPABASE_URL: optionalUrlText,
+  VITE_SUPABASE_ANON_KEY: optionalEnvText,
 });
 
 export type ApiConfig = z.infer<typeof apiConfigSchema>;
@@ -92,36 +126,43 @@ export class ConfigValidationError extends Error {
   constructor(app: string, issues: readonly z.ZodIssue[]) {
     super(
       `Invalid ${app} configuration: ${issues
-        .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
-        .join("; ")}`,
+        .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+        .join('; ')}`,
     );
-    this.name = "ConfigValidationError";
+    this.name = 'ConfigValidationError';
     this.issues = issues;
   }
 }
 
-function schemaForApp(app: "api" | "worker" | "web-public") {
-  if (app === "api") return apiConfigSchema;
-  if (app === "worker") return workerConfigSchema;
+function schemaForApp(app: 'api' | 'worker' | 'web-public') {
+  if (app === 'api') return apiConfigSchema;
+  if (app === 'worker') return workerConfigSchema;
   return webPublicConfigSchema;
 }
 
 function redactValue(key: string, value: unknown): unknown {
-  if (secretKeys.has(key) || /(?:SECRET|TOKEN|PASSWORD|PRIVATE_KEY|API_KEY)$/i.test(key)) {
-    return value === undefined ? undefined : "[REDACTED]";
+  if (value instanceof Secret) return '[REDACTED]';
+  if (
+    secretKeys.has(key) ||
+    /(?:SECRET|TOKEN|PASSWORD|PRIVATE_KEY|API_KEY|DATABASE_URL)$/i.test(key)
+  ) {
+    return value === undefined ? undefined : '[REDACTED]';
   }
   if (publicKeys.has(key)) return value;
-  if (Array.isArray(value)) return value.map((item) => redactValue("", item));
-  if (value && typeof value === "object") {
+  if (Array.isArray(value)) return value.map((item) => redactValue('', item));
+  if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([entryKey, entryValue]) => [entryKey, redactValue(entryKey, entryValue)]),
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        redactValue(entryKey, entryValue),
+      ]),
     );
   }
   return value;
 }
 
 export function redactConfig<T extends object>(config: T): Record<string, unknown> {
-  return redactValue("", config) as Record<string, unknown>;
+  return redactValue('', config) as Record<string, unknown>;
 }
 
 export function serializeConfig(config: object): string {
@@ -129,18 +170,18 @@ export function serializeConfig(config: object): string {
 }
 
 function attachSafeSerialization<T extends object>(config: T): T {
-  Object.defineProperty(config, "toJSON", {
+  Object.defineProperty(config, 'toJSON', {
     enumerable: false,
     value: () => redactConfig(config),
   });
   return config;
 }
 
-export function loadConfig<E extends ConfigEnv>(app: "api", env: E): ApiConfig;
-export function loadConfig<E extends ConfigEnv>(app: "worker", env: E): WorkerConfig;
-export function loadConfig<E extends ConfigEnv>(app: "web-public", env: E): WebPublicConfig;
+export function loadConfig<E extends ConfigEnv>(app: 'api', env: E): ApiConfig;
+export function loadConfig<E extends ConfigEnv>(app: 'worker', env: E): WorkerConfig;
+export function loadConfig<E extends ConfigEnv>(app: 'web-public', env: E): WebPublicConfig;
 export function loadConfig(
-  app: "api" | "worker" | "web-public",
+  app: 'api' | 'worker' | 'web-public',
   env: ConfigEnv,
 ): ApiConfig | WorkerConfig | WebPublicConfig {
   const parsed = schemaForApp(app).safeParse(env);

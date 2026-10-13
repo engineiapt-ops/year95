@@ -1,8 +1,9 @@
-import process from "node:process";
+import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 
 function quoteIdentifier(identifier) {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) throw new Error('Unsafe PostgreSQL schema identifier');
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier))
+    throw new Error('Unsafe PostgreSQL schema identifier');
   return '"' + identifier.replaceAll('"', '""') + '"';
 }
 
@@ -193,13 +194,17 @@ export class PsqlDatabaseClient {
       env.PGOPTIONS = '-c standard_conforming_strings=on';
     }
 
-    const result = spawnSync('psql', [
-      this.connectionString, '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', script,
-    ], { env, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 });
+    const result = spawnSync(
+      'psql',
+      [this.connectionString, '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', script],
+      { env, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 },
+    );
 
     if (result.error) throw result.error;
     if (result.status !== 0) {
-      throw new Error('PostgreSQL command failed: ' + (result.stderr || result.stdout || 'psql failed').trim());
+      throw new Error(
+        'PostgreSQL command failed: ' + (result.stderr || result.stdout || 'psql failed').trim(),
+      );
     }
     return (result.stdout || '').trim();
   }
@@ -209,7 +214,9 @@ export class PsqlDatabaseClient {
     const script = [
       this.readOnly ? 'BEGIN READ ONLY;' : 'BEGIN;',
       'SET LOCAL search_path TO ' + this.quotedSchema + ', public;',
-      "SELECT COALESCE(json_agg(row_to_json(_year95_rows)), '[]'::json)::text FROM (" + query + ') AS _year95_rows;',
+      "SELECT COALESCE(json_agg(row_to_json(_year95_rows)), '[]'::json)::text FROM (" +
+        query +
+        ') AS _year95_rows;',
       'COMMIT;',
     ].join('\n');
     const output = this.run(script);
@@ -221,7 +228,16 @@ export class PsqlDatabaseClient {
 
   async transaction(statements) {
     if (this.readOnly) throw new Error('Read-only database client refuses all transactions');
-    const sql = statements.map((statement) => applyParameters(statement.sql, statement.values)).join(';\n');
-    this.run(['BEGIN;', 'SET LOCAL search_path TO ' + this.quotedSchema + ', public;', sql + ';', 'COMMIT;'].join('\n'));
+    const sql = statements
+      .map((statement) => applyParameters(statement.sql, statement.values))
+      .join(';\n');
+    this.run(
+      [
+        'BEGIN;',
+        'SET LOCAL search_path TO ' + this.quotedSchema + ', public;',
+        sql + ';',
+        'COMMIT;',
+      ].join('\n'),
+    );
   }
 }

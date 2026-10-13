@@ -23,11 +23,14 @@ function normalizeSchemaName<T>(value: T, schemaName: string): T {
   }
   return value;
 }
-export async function schemaFingerprint(db: MigrationDatabase, schemaName: string): Promise<SchemaFingerprint> {
+export async function schemaFingerprint(
+  db: MigrationDatabase,
+  schemaName: string,
+): Promise<SchemaFingerprint> {
   const tables = await db.queryRows(
     [
       'SELECT table_name, table_type FROM information_schema.tables',
-      'WHERE table_schema = $1 AND table_name <> \'schema_migrations\'',
+      "WHERE table_schema = $1 AND table_name <> 'schema_migrations'",
       'ORDER BY table_name, table_type',
     ].join(' '),
     [schemaName],
@@ -37,7 +40,7 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
       'SELECT table_name, column_name, ordinal_position, column_default, is_nullable, data_type,',
       'udt_name, character_maximum_length, numeric_precision, numeric_scale, datetime_precision,',
       'is_identity, identity_generation, is_generated, generation_expression',
-      'FROM information_schema.columns WHERE table_schema = $1 AND table_name <> \'schema_migrations\'',
+      "FROM information_schema.columns WHERE table_schema = $1 AND table_name <> 'schema_migrations'",
       'ORDER BY table_name, ordinal_position',
     ].join(' '),
     [schemaName],
@@ -52,7 +55,7 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
       'FROM pg_constraint AS constraint_record',
       'JOIN pg_class AS table_relation ON table_relation.oid = constraint_record.conrelid',
       'JOIN pg_namespace AS schema_record ON schema_record.oid = table_relation.relnamespace',
-      'WHERE schema_record.nspname = $1 AND table_relation.relname <> \'schema_migrations\'',
+      "WHERE schema_record.nspname = $1 AND table_relation.relname <> 'schema_migrations'",
       'ORDER BY table_relation.relname, constraint_record.conname',
     ].join(' '),
     [schemaName],
@@ -60,7 +63,7 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
   const indexes = await db.queryRows(
     [
       'SELECT tablename AS table_name, indexname AS index_name, indexdef AS definition FROM pg_indexes',
-      'WHERE schemaname = $1 AND tablename <> \'schema_migrations\' ORDER BY tablename, indexname',
+      "WHERE schemaname = $1 AND tablename <> 'schema_migrations' ORDER BY tablename, indexname",
     ].join(' '),
     [schemaName],
   );
@@ -73,7 +76,7 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
       'JOIN pg_class AS table_relation ON table_relation.oid = trigger_record.tgrelid',
       'JOIN pg_namespace AS schema_record ON schema_record.oid = table_relation.relnamespace',
       'JOIN pg_proc AS function_record ON function_record.oid = trigger_record.tgfoid',
-      'WHERE schema_record.nspname = $1 AND NOT trigger_record.tgisinternal AND table_relation.relname <> \'schema_migrations\'',
+      "WHERE schema_record.nspname = $1 AND NOT trigger_record.tgisinternal AND table_relation.relname <> 'schema_migrations'",
       'ORDER BY table_relation.relname, trigger_record.tgname',
     ].join(' '),
     [schemaName],
@@ -93,17 +96,25 @@ export async function schemaFingerprint(db: MigrationDatabase, schemaName: strin
       ),
     };
   });
-  return normalizeSchemaName({
-    tables, columns, constraints, indexes, triggers: normalizedTriggers,
-  }, schemaName) as SchemaFingerprint;
+  return normalizeSchemaName(
+    {
+      tables,
+      columns,
+      constraints,
+      indexes,
+      triggers: normalizedTriggers,
+    },
+    schemaName,
+  ) as SchemaFingerprint;
 }
 function filterExcludedTables(
   fingerprint: SchemaFingerprint,
   excludedTableNames: ReadonlySet<string>,
 ): SchemaFingerprint {
-  const retain = (rows: readonly Record<string, unknown>[]) => rows.filter((row) =>
-    typeof row.table_name !== 'string' || !excludedTableNames.has(row.table_name),
-  );
+  const retain = (rows: readonly Record<string, unknown>[]) =>
+    rows.filter(
+      (row) => typeof row.table_name !== 'string' || !excludedTableNames.has(row.table_name),
+    );
   return {
     tables: retain(fingerprint.tables),
     columns: retain(fingerprint.columns),
@@ -183,8 +194,8 @@ export async function compareSchemaFingerprintsIgnoringTablesAndIndexes(
     const tablesFiltered = filterExcludedTables(fingerprint, excludedTables);
     return {
       ...tablesFiltered,
-      indexes: tablesFiltered.indexes.filter((row) =>
-        typeof row.index_name !== 'string' || !excludedIndexes.has(row.index_name),
+      indexes: tablesFiltered.indexes.filter(
+        (row) => typeof row.index_name !== 'string' || !excludedIndexes.has(row.index_name),
       ),
     };
   };

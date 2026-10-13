@@ -21,7 +21,12 @@ async function main() {
     const referenceDb = new PsqlDatabaseClient({ connectionString: referenceUrl, readOnly: true });
     const targetReadOnly = new PsqlDatabaseClient({ connectionString, readOnly: true });
     compareExistingSchema = async () => {
-      const comparison = await compareSchemaFingerprints(referenceDb, targetReadOnly, 'public', 'public');
+      const comparison = await compareSchemaFingerprints(
+        referenceDb,
+        targetReadOnly,
+        'public',
+        'public',
+      );
       return { equivalent: comparison.equivalent, differences: comparison.differences };
     };
 
@@ -32,10 +37,7 @@ async function main() {
       .map(({ name }) => name)
       .filter((name) => /^[0-9]{3}_/.test(name) && Number(name.slice(0, 3)) <= 18);
     legacySchemaBridge = {
-      migrationNames: [
-        '024_add_instruments.sql',
-        '025_add_decision_log_paper_idempotency.sql',
-      ],
+      migrationNames: ['024_add_instruments.sql', '025_add_decision_log_paper_idempotency.sql'],
       expectedAppliedNames,
       compareSchema: async () => {
         const instrumentTable = await targetReadOnly.queryRows(
@@ -43,7 +45,10 @@ async function main() {
           ['public'],
         );
         if (instrumentTable[0]?.exists === true) {
-          return { equivalent: false, differences: ['instruments must be absent for the supported recovery path'] };
+          return {
+            equivalent: false,
+            differences: ['instruments must be absent for the supported recovery path'],
+          };
         }
         const idempotencyIndex = await targetReadOnly.queryRows(
           'SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = $1 AND indexname = $2) AS exists',
@@ -52,7 +57,9 @@ async function main() {
         if (idempotencyIndex[0]?.exists === true) {
           return {
             equivalent: false,
-            differences: ['idx_decision_log_paper_idempotency must be absent for the supported recovery path'],
+            differences: [
+              'idx_decision_log_paper_idempotency must be absent for the supported recovery path',
+            ],
           };
         }
         const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(

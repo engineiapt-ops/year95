@@ -1,19 +1,30 @@
 export type SqlValue = string | number | boolean | null;
-export interface SqlStatement { sql: string; values?: readonly SqlValue[] }
+export interface SqlStatement {
+  sql: string;
+  values?: readonly SqlValue[];
+}
 export interface MigrationDatabase {
   queryRows<Row extends Record<string, unknown> = Record<string, unknown>>(
-    sql: string, values?: readonly SqlValue[],
+    sql: string,
+    values?: readonly SqlValue[],
   ): Promise<readonly Row[]>;
   transaction(statements: readonly SqlStatement[]): Promise<void>;
 }
-export interface MigrationRecord { name: string; checksum: string; origin: 'baseline' | 'migration' }
+export interface MigrationRecord {
+  name: string;
+  checksum: string;
+  origin: 'baseline' | 'migration';
+}
 export interface MigrationPlan {
   baselineSchemaSql: string;
   baselineRecords: readonly MigrationRecord[];
   migrations: readonly { record: MigrationRecord; sql: string }[];
   allRecords: readonly MigrationRecord[];
 }
-export interface SchemaComparison { equivalent: boolean; differences?: readonly string[] }
+export interface SchemaComparison {
+  equivalent: boolean;
+  differences?: readonly string[];
+}
 export interface LegacySchemaBridge {
   /** Ordered additive migrations that atomically convert the supported legacy schema to the canonical baseline. */
   migrationNames: readonly string[];
@@ -36,7 +47,8 @@ export function assertRecordedChecksums(
   const expectedByName = new Map(expected.map((record) => [record.name, record]));
   for (const record of applied) {
     const current = expectedByName.get(record.name);
-    if (!current) throw new Error('Unknown applied migration ' + record.name + '; refusing to continue');
+    if (!current)
+      throw new Error('Unknown applied migration ' + record.name + '; refusing to continue');
     if (current.checksum !== record.checksum) {
       throw new Error('Checksum changed for ' + record.name + '; refusing to continue');
     }
@@ -46,8 +58,11 @@ export function assertRecordedChecksums(
   }
 }
 function recordFromRow(row: Record<string, unknown>): MigrationRecord {
-  if (typeof row.name !== 'string' || typeof row.checksum !== 'string' ||
-      (row.origin !== 'baseline' && row.origin !== 'migration')) {
+  if (
+    typeof row.name !== 'string' ||
+    typeof row.checksum !== 'string' ||
+    (row.origin !== 'baseline' && row.origin !== 'migration')
+  ) {
     throw new Error('schema_migrations contains malformed records; refusing to continue');
   }
   return { name: row.name, checksum: row.checksum, origin: row.origin };
@@ -87,17 +102,22 @@ async function hasTracker(db: MigrationDatabase): Promise<boolean> {
   return rows[0]?.exists === true;
 }
 async function userObjectCount(db: MigrationDatabase): Promise<number> {
-  const rows = await db.queryRows<{ object_count: number | string }>([
-    'SELECT COUNT(*)::int AS object_count FROM (',
-    ' SELECT table_name AS object_name FROM information_schema.tables',
-    "  WHERE table_schema = current_schema() AND table_name <> 'schema_migrations'",
-    ' UNION ALL SELECT routine_name AS object_name FROM information_schema.routines WHERE routine_schema = current_schema()',
-    ' UNION ALL SELECT sequence_name AS object_name FROM information_schema.sequences WHERE sequence_schema = current_schema()',
-    ') AS user_objects',
-  ].join('\n'));
+  const rows = await db.queryRows<{ object_count: number | string }>(
+    [
+      'SELECT COUNT(*)::int AS object_count FROM (',
+      ' SELECT table_name AS object_name FROM information_schema.tables',
+      "  WHERE table_schema = current_schema() AND table_name <> 'schema_migrations'",
+      ' UNION ALL SELECT routine_name AS object_name FROM information_schema.routines WHERE routine_schema = current_schema()',
+      ' UNION ALL SELECT sequence_name AS object_name FROM information_schema.sequences WHERE sequence_schema = current_schema()',
+      ') AS user_objects',
+    ].join('\n'),
+  );
   return Number(rows[0]?.object_count ?? 0);
 }
-async function currentRecords(db: MigrationDatabase, columns: ReadonlySet<string>): Promise<MigrationRecord[]> {
+async function currentRecords(
+  db: MigrationDatabase,
+  columns: ReadonlySet<string>,
+): Promise<MigrationRecord[]> {
   if (!columns.has('name') || !columns.has('checksum') || !columns.has('origin')) return [];
   const rows = await db.queryRows<Record<string, unknown>>(
     'SELECT name, checksum, origin FROM schema_migrations ORDER BY name',
@@ -108,7 +128,9 @@ async function compareExisting(
   compareExistingSchema: RunMigrationsOptions['compareExistingSchema'],
 ): Promise<SchemaComparison> {
   if (!compareExistingSchema) {
-    throw new Error('Existing database has no complete baseline ledger; supply a schema comparator. Baseline was not executed.');
+    throw new Error(
+      'Existing database has no complete baseline ledger; supply a schema comparator. Baseline was not executed.',
+    );
   }
   return compareExistingSchema();
 }
@@ -127,8 +149,13 @@ async function legacyTrackerNames(
   db: MigrationDatabase,
   columns: ReadonlySet<string>,
 ): Promise<string[]> {
-  const sourceNameColumn = columns.has('filename') ? 'filename' : columns.has('name') ? 'name' : null;
-  if (!sourceNameColumn) throw new Error('Unsupported schema_migrations layout; refusing to mutate it');
+  const sourceNameColumn = columns.has('filename')
+    ? 'filename'
+    : columns.has('name')
+      ? 'name'
+      : null;
+  if (!sourceNameColumn)
+    throw new Error('Unsupported schema_migrations layout; refusing to mutate it');
   const rows = await db.queryRows<{ name: string }>(
     'SELECT ' + sourceNameColumn + ' AS name FROM schema_migrations ORDER BY ' + sourceNameColumn,
   );
@@ -141,7 +168,9 @@ function assertExpectedLegacyHistory(
   const actual = [...actualNames].sort();
   const expected = [...expectedNames].sort();
   if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
-    throw new Error('Legacy migration history does not match the supported compatibility bridge; refusing to continue');
+    throw new Error(
+      'Legacy migration history does not match the supported compatibility bridge; refusing to continue',
+    );
   }
 }
 async function applyLegacySchemaBridge(
@@ -150,26 +179,38 @@ async function applyLegacySchemaBridge(
   plan: MigrationPlan,
   bridge: LegacySchemaBridge,
 ): Promise<void> {
-  if (!columns.has('filename') || columns.has('name') || columns.has('checksum') || columns.has('origin')) {
+  if (
+    !columns.has('filename') ||
+    columns.has('name') ||
+    columns.has('checksum') ||
+    columns.has('origin')
+  ) {
     throw new Error('The compatibility bridge only accepts the recognized legacy filename ledger');
   }
   assertExpectedLegacyHistory(await legacyTrackerNames(db, columns), bridge.expectedAppliedNames);
-  if (bridge.migrationNames.length === 0 ||
-      new Set(bridge.migrationNames).size !== bridge.migrationNames.length) {
+  if (
+    bridge.migrationNames.length === 0 ||
+    new Set(bridge.migrationNames).size !== bridge.migrationNames.length
+  ) {
     throw new Error('Legacy schema bridge must declare a non-empty, unique ordered migration list');
   }
   const migrations = bridge.migrationNames.map((migrationName) => {
     const migration = plan.migrations.find(({ record }) => record.name === migrationName);
     if (!migration) {
-      throw new Error('Supported legacy bridge migration is not present in the migration plan: ' + migrationName);
+      throw new Error(
+        'Supported legacy bridge migration is not present in the migration plan: ' + migrationName,
+      );
     }
     return migration;
   });
   const comparison = await bridge.compareSchema();
   if (!comparison.equivalent) {
     const details = comparison.differences?.length ? ': ' + comparison.differences.join('; ') : '';
-    throw new Error('Existing database does not match the supported legacy schema for ' +
-      bridge.migrationNames.join(', ') + details);
+    throw new Error(
+      'Existing database does not match the supported legacy schema for ' +
+        bridge.migrationNames.join(', ') +
+        details,
+    );
   }
   // Apply every bridge migration and record its filename atomically in the legacy ledger.
   await db.transaction([
@@ -181,17 +222,26 @@ async function applyLegacySchemaBridge(
   ]);
 }
 async function upgradeLegacyTracker(
-  db: MigrationDatabase, columns: ReadonlySet<string>, plan: MigrationPlan,
+  db: MigrationDatabase,
+  columns: ReadonlySet<string>,
+  plan: MigrationPlan,
 ): Promise<void> {
-  const sourceNameColumn = columns.has('filename') ? 'filename' : columns.has('name') ? 'name' : null;
-  if (!sourceNameColumn) throw new Error('Unsupported schema_migrations layout; refusing to mutate it');
+  const sourceNameColumn = columns.has('filename')
+    ? 'filename'
+    : columns.has('name')
+      ? 'name'
+      : null;
+  if (!sourceNameColumn)
+    throw new Error('Unsupported schema_migrations layout; refusing to mutate it');
   const names = await db.queryRows<{ name: string }>(
     'SELECT ' + sourceNameColumn + ' AS name FROM schema_migrations ORDER BY ' + sourceNameColumn,
   );
   const expectedByName = new Map(plan.allRecords.map((record) => [record.name, record]));
   for (const row of names) {
     if (!expectedByName.has(row.name)) {
-      throw new Error('Legacy schema_migrations contains unknown entry ' + row.name + '; refusing to continue');
+      throw new Error(
+        'Legacy schema_migrations contains unknown entry ' + row.name + '; refusing to continue',
+      );
     }
   }
   const statements: SqlStatement[] = [
@@ -213,13 +263,15 @@ async function upgradeLegacyTracker(
     });
   }
   statements.push(
-    { sql: [
-      'DO $$ BEGIN',
-      " IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'schema_migrations_origin_check' AND conrelid = 'schema_migrations'::regclass) THEN",
-      "  ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_origin_check CHECK (origin IN ('baseline', 'migration'));",
-      ' END IF;',
-      'END $$',
-    ].join('\n') },
+    {
+      sql: [
+        'DO $$ BEGIN',
+        " IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'schema_migrations_origin_check' AND conrelid = 'schema_migrations'::regclass) THEN",
+        "  ALTER TABLE schema_migrations ADD CONSTRAINT schema_migrations_origin_check CHECK (origin IN ('baseline', 'migration'));",
+        ' END IF;',
+        'END $$',
+      ].join('\n'),
+    },
     { sql: 'ALTER TABLE schema_migrations ALTER COLUMN name SET NOT NULL' },
     { sql: 'ALTER TABLE schema_migrations ALTER COLUMN checksum SET NOT NULL' },
     { sql: 'ALTER TABLE schema_migrations ALTER COLUMN origin SET NOT NULL' },
@@ -233,7 +285,10 @@ async function upgradeLegacyTracker(
  * executed against that final schema. Existing databases are only marked after
  * a comparator proves structural equivalence.
  */
-export async function runMigrations(db: MigrationDatabase, options: RunMigrationsOptions): Promise<void> {
+export async function runMigrations(
+  db: MigrationDatabase,
+  options: RunMigrationsOptions,
+): Promise<void> {
   const plan = options.plan;
   let trackerExists = await hasTracker(db);
   let columns = trackerExists ? await trackerColumns(db) : new Set<string>();
@@ -241,15 +296,23 @@ export async function runMigrations(db: MigrationDatabase, options: RunMigration
   const objectCount = await userObjectCount(db);
   const isEmpty = objectCount === 0;
 
-  if (trackerExists && (!columns.has('name') || !columns.has('checksum') || !columns.has('origin'))) {
+  if (
+    trackerExists &&
+    (!columns.has('name') || !columns.has('checksum') || !columns.has('origin'))
+  ) {
     if (isEmpty) {
-      const legacyRows = (columns.has('filename') || columns.has('name'))
-        ? await db.queryRows<{ name: string }>(
-          'SELECT ' + (columns.has('filename') ? 'filename' : 'name') + ' AS name FROM schema_migrations',
-        )
-        : [];
+      const legacyRows =
+        columns.has('filename') || columns.has('name')
+          ? await db.queryRows<{ name: string }>(
+              'SELECT ' +
+                (columns.has('filename') ? 'filename' : 'name') +
+                ' AS name FROM schema_migrations',
+            )
+          : [];
       if (legacyRows.length > 0) {
-        throw new Error('Empty database has non-empty legacy migration metadata; refusing to bootstrap');
+        throw new Error(
+          'Empty database has non-empty legacy migration metadata; refusing to bootstrap',
+        );
       }
     } else {
       const comparison = await compareExisting(options.compareExistingSchema);
@@ -295,7 +358,9 @@ export async function runMigrations(db: MigrationDatabase, options: RunMigration
     }
   } else {
     if (isEmpty && applied.length > 0) {
-      throw new Error('Empty database has applied migration metadata; refusing to replay or repair baseline');
+      throw new Error(
+        'Empty database has applied migration metadata; refusing to replay or repair baseline',
+      );
     }
     if (isEmpty) {
       await db.transaction([
@@ -305,10 +370,14 @@ export async function runMigrations(db: MigrationDatabase, options: RunMigration
       applied = await currentRecords(db, columns);
     } else {
       const appliedNames = new Set(applied.map((record) => record.name));
-      const missingBaseline = plan.baselineRecords.filter((record) => !appliedNames.has(record.name));
+      const missingBaseline = plan.baselineRecords.filter(
+        (record) => !appliedNames.has(record.name),
+      );
       if (missingBaseline.length > 0) {
         await assertEquivalent(options.compareExistingSchema);
-        await db.transaction(missingBaseline.map((record) => makeInsert(record, legacyFilenameColumn)));
+        await db.transaction(
+          missingBaseline.map((record) => makeInsert(record, legacyFilenameColumn)),
+        );
         applied = await currentRecords(db, columns);
       }
     }

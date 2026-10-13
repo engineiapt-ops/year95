@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const migrationDir = path.join(rootDir, 'db', 'migrations');
 function withoutCommentsAndStringLiterals(sql) {
-  return sql.replace(/--[^\n\r]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/'(?:''|[^'])*'/g, "''");
+  return sql
+    .replace(/--[^\n\r]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/'(?:''|[^'])*'/g, "''");
 }
 async function main() {
   const files = (await readdir(migrationDir)).filter((name) => name.endsWith('.sql')).sort();
@@ -16,12 +19,17 @@ async function main() {
     if (!match) throw new Error('Invalid migration filename: ' + file);
     const number = Number(match[1]);
     if (number < 24) throw new Error('db/migrations is reserved for migrations 024+: ' + file);
-    if (number !== previous + 1) throw new Error('Forward-only migration sequence has a gap before ' + file);
+    if (number !== previous + 1)
+      throw new Error('Forward-only migration sequence has a gap before ' + file);
     previous = number;
-    const sql = withoutCommentsAndStringLiterals(await readFile(path.join(migrationDir, file), 'utf8'));
+    const sql = withoutCommentsAndStringLiterals(
+      await readFile(path.join(migrationDir, file), 'utf8'),
+    );
     const destructive = /\b(?:DROP|TRUNCATE|RENAME)\b/i;
     if (destructive.test(sql)) {
-      throw new Error('Destructive DDL is prohibited in ' + file + '. db/baseline is intentionally not scanned.');
+      throw new Error(
+        'Destructive DDL is prohibited in ' + file + '. db/baseline is intentionally not scanned.',
+      );
     }
   }
   console.log('check:migrations PASS (' + files.length + ' migration(s)); db/baseline excluded.');

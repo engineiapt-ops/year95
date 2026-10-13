@@ -14,20 +14,26 @@ const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 
 describe('forward-only migration metadata', () => {
   test('rejects a changed checksum before applying SQL', () => {
-    expect(() => assertRecordedChecksums(
-      [{ name: '024_add_example.sql', checksum: 'c'.repeat(64), origin: 'migration' }],
-      expected,
-    )).toThrow(/checksum changed/i);
+    expect(() =>
+      assertRecordedChecksums(
+        [{ name: '024_add_example.sql', checksum: 'c'.repeat(64), origin: 'migration' }],
+        expected,
+      ),
+    ).toThrow(/checksum changed/i);
   });
   test('rejects origin changes and unknown recorded migrations', () => {
-    expect(() => assertRecordedChecksums(
-      [{ name: 'schema.sql', checksum: 'a'.repeat(64), origin: 'migration' }],
-      expected,
-    )).toThrow(/origin changed/i);
-    expect(() => assertRecordedChecksums(
-      [{ name: '003_removed.sql', checksum: 'd'.repeat(64), origin: 'baseline' }],
-      expected,
-    )).toThrow(/unknown applied migration/i);
+    expect(() =>
+      assertRecordedChecksums(
+        [{ name: 'schema.sql', checksum: 'a'.repeat(64), origin: 'migration' }],
+        expected,
+      ),
+    ).toThrow(/origin changed/i);
+    expect(() =>
+      assertRecordedChecksums(
+        [{ name: '003_removed.sql', checksum: 'd'.repeat(64), origin: 'baseline' }],
+        expected,
+      ),
+    ).toThrow(/unknown applied migration/i);
   });
   test('loads canonical schema plus 23 immutable historical migration checksums', async () => {
     const plan = await loadMigrationPlan(rootDir);
@@ -52,25 +58,39 @@ describe('forward-only migration metadata', () => {
     expect(plan.migrations[0]?.record.origin).toBe('migration');
     expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
     expect(plan.migrations[1]?.record.origin).toBe('migration');
-    expect(plan.migrations[1]?.sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS idx_decision_log_paper_idempotency');
+    expect(plan.migrations[1]?.sql).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_decision_log_paper_idempotency',
+    );
     expect(plan.migrations[1]?.sql).toContain('WHERE backtest_run_id IS NULL');
     expect(plan.allRecords.some((record) => record.name === '024_add_instruments.sql')).toBe(true);
-    expect(plan.allRecords.some((record) => record.name === '025_add_decision_log_paper_idempotency.sql')).toBe(true);
+    expect(
+      plan.allRecords.some(
+        (record) => record.name === '025_add_decision_log_paper_idempotency.sql',
+      ),
+    ).toBe(true);
     expect(plan.migrations[2]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
     expect(plan.migrations[2]?.sql).toContain('SET search_path = pg_catalog');
-    expect(plan.allRecords.some((record) => record.name === '026_enable_rls_and_pin_audit_search_path.sql')).toBe(true);
+    expect(
+      plan.allRecords.some(
+        (record) => record.name === '026_enable_rls_and_pin_audit_search_path.sql',
+      ),
+    ).toBe(true);
     expect(plan.migrations[3]?.sql).toContain('CREATE TABLE IF NOT EXISTS allowed_emails');
     expect(plan.migrations[3]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
-    expect(plan.allRecords.some((record) => record.name === '027_add_identity_repository_tables.sql')).toBe(true);
+    expect(
+      plan.allRecords.some((record) => record.name === '027_add_identity_repository_tables.sql'),
+    ).toBe(true);
   });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
     const plan = await loadMigrationPlan(rootDir);
     const report = await readFile(path.join(rootDir, 'docs', 'DB-BASELINE.md'), 'utf8');
     for (const record of plan.baselineRecords) {
       const filePath = path.join(rootDir, 'db', 'baseline', record.name);
-      const actual = createHash('sha256').update(await readFile(filePath)).digest('hex');
+      const actual = createHash('sha256')
+        .update(await readFile(filePath))
+        .digest('hex');
       expect(record.checksum).toBe(actual);
-      const row = report.split('\n').find((line) => line.startsWith('| ' + record.name + ' |'));
+      const row = report.split('\n').find((line) => line.startsWith('| ' + record.name));
       expect(row, 'missing checksum row for ' + record.name).toContain(record.checksum);
     }
   });
