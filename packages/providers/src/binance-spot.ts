@@ -2,7 +2,6 @@ import {
   assertLatestCandleFresh,
   InvalidMarketDataError,
   MARKET_TIMEFRAMES,
-  maxMarketDataAgeMs,
   type CandleQuery,
   type HistoricalCandlesQuery,
   type LatestCandlesQuery,
