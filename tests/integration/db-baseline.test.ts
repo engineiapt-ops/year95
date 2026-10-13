@@ -736,7 +736,7 @@ integrationTest('refuses to mark an existing database when schema comparison fai
           return { equivalent: result.equivalent, differences: result.differences };
         },
       }),
-    ).rejects.toThrow(/does not match db\/baseline\/schema\.sql/i);
+    ).rejects.toThrow(/does not match the canonical baseline schema/i);
     const tracker = await target.queryRows<{ exists: boolean }>(
       "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'schema_migrations') AS exists",
       [targetSchema],
