@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_pending:
-        description: "Expected pending migration numbers, comma-separated (for example 027,028,029)."
+        description: 'Expected pending migration numbers, comma-separated (for example 027,028,029).'
         required: true
         type: string
 
