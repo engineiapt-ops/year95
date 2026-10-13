@@ -14,11 +14,7 @@ const password = process.env.AUTH_SMOKE_PASSWORD ?? 'Year95-local-smoke-2026!';
 assertLoopback(SUPABASE_URL, 'SUPABASE_URL');
 assertLoopback(API_BASE_URL, 'API_BASE_URL');
 assertLoopback(WEB_BASE_URL, 'WEB_BASE_URL');
-assert.match(
-  email,
-  /@example\.test$/i,
-  'Auth smoke test must use a non-production .test address',
-);
+assert.match(email, /@example\.test$/i, 'Auth smoke test must use a non-production .test address');
 
 const serviceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = SUPABASE_ANON_KEY;
