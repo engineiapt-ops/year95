@@ -12,7 +12,12 @@ import { VERSION } from './index.js';
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_PRUNE_INTERVAL_MS = 60_000;
-const MAX_REQUESTED_CORS_HEADERS = new Set(['accept', 'authorization', 'content-type', 'x-request-id']);
+const MAX_REQUESTED_CORS_HEADERS = new Set([
+  'accept',
+  'authorization',
+  'content-type',
+  'x-request-id',
+]);
 const ALLOWED_CORS_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
 
 type RateLimitTier = 'standard' | 'heavy' | 'disabled';
@@ -237,7 +242,10 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
     const rawRequestedHeaders = request.headers['access-control-request-headers'];
     const requestedHeaders =
       typeof rawRequestedHeaders === 'string'
-        ? rawRequestedHeaders.split(',').map((header) => header.trim().toLowerCase()).filter(Boolean)
+        ? rawRequestedHeaders
+            .split(',')
+            .map((header) => header.trim().toLowerCase())
+            .filter(Boolean)
         : [];
 
     if (requestedHeaders.some((header) => !MAX_REQUESTED_CORS_HEADERS.has(header))) {
@@ -298,7 +306,11 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
 
     if (statusCode >= 500) {
       request.log.error(
-        { requestId: request.id, errorName: error instanceof Error ? error.name : 'UnknownError', errorCode: code },
+        {
+          requestId: request.id,
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          errorCode: code,
+        },
         'Unhandled API error',
       );
     }
