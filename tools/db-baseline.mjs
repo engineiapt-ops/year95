@@ -82,7 +82,7 @@ async function main() {
       schemaCorrectionsSha256: plan.baselineRecords.find(
         (record) => record.name === 'schema-corrections.sql',
       )?.checksum,
-      baselineMigrationCount: plan.baselineRecords.filter(({ name }) => /^\\d{3}_/.test(name))
+      baselineMigrationCount: plan.baselineRecords.filter(({ name }) => /^\d{3}_/.test(name))
         .length,
       migrationChecksums: plan.baselineRecords.map(({ name, checksum, origin }) => ({
         name,
