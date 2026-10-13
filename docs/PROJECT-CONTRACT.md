@@ -166,7 +166,7 @@ The following are explicitly outside the product contract:
 - use of open candles for decisions;
 - browser-held database service-role credentials;
 - browser-held broker secrets;
-- destructive database migrations;
+- destructive database migrations, except for the narrowly scoped CHECK replacement allowed by §2.11.1;
 - Vercel-specific runtime dependencies;
 - ambiguous sizing fields such as `sizePct`.
 
