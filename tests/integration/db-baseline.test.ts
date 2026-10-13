@@ -25,6 +25,14 @@ import {
 const connectionString = process.env.DATABASE_URL?.trim();
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const schemaSql = await readFile(path.join(rootDir, 'db/baseline/schema.sql'), 'utf8');
+const schemaCorrectionsSql = await readFile(
+  path.join(rootDir, 'db/baseline/schema-corrections.sql'),
+  'utf8',
+);
+const canonicalSchemaStatements: SqlStatement[] = [
+  { sql: schemaSql },
+  { sql: schemaCorrectionsSql },
+];
 const plan = await loadMigrationPlan(rootDir);
 const integrationTest = test.skipIf(!connectionString);
 
@@ -77,7 +85,7 @@ async function createLegacyFixture(
     .map((name) => "('" + name.replaceAll("'", "''") + "')")
     .join(', ');
   const statements: SqlStatement[] = [
-    { sql: schemaSql },
+    ...canonicalSchemaStatements,
     { sql: 'DROP TABLE instruments' },
     { sql: 'DROP INDEX "' + targetSchema + '".idx_decision_log_paper_idempotency' },
   ];
@@ -105,7 +113,7 @@ integrationTest(
   'recognized legacy schema is bridged additively and preserves existing data',
   async () => {
     await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-      await reference.transaction([{ sql: schemaSql }]);
+      await reference.transaction(canonicalSchemaStatements);
       await createLegacyFixture(target, targetSchema);
       const compareExistingSchema = async () => {
         const comparison = await compareSchemaFingerprints(
@@ -173,7 +181,7 @@ integrationTest(
       const applied = await target.queryRows<{ name: string; origin: string }>(
         'SELECT name, origin FROM schema_migrations ORDER BY name',
       );
-      expect(applied.filter((row) => row.origin === 'baseline')).toHaveLength(24);
+      expect(applied.filter((row) => row.origin === 'baseline')).toHaveLength(25);
       expect(applied.filter((row) => row.origin === 'migration')).toEqual([
         { name: '024_add_instruments.sql', origin: 'migration' },
         { name: '025_add_decision_log_paper_idempotency.sql', origin: 'migration' },
@@ -201,7 +209,7 @@ integrationTest(
   'legacy bridge rolls back all repair migrations when idempotency keys collide',
   async () => {
     await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-      await reference.transaction([{ sql: schemaSql }]);
+      await reference.transaction(canonicalSchemaStatements);
       await createLegacyFixture(target, targetSchema);
       await target.transaction([
         {
@@ -287,7 +295,7 @@ integrationTest(
   'legacy bridge refuses unrelated schema drift before any bridge write',
   async () => {
     await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-      await reference.transaction([{ sql: schemaSql }]);
+      await reference.transaction(canonicalSchemaStatements);
       await createLegacyFixture(target, targetSchema, true);
       const bridge = {
         migrationNames: ['024_add_instruments.sql', '025_add_decision_log_paper_idempotency.sql'],
@@ -440,10 +448,10 @@ integrationTest(
 );
 
 integrationTest(
-  'canonical baseline includes the final effects of historical migrations 008-009 and 022-023',
+  'canonical baseline includes historical indexes and final effects of migrations 007-009, 011, and 022-023',
   async () => {
     await withSchemas(async (_admin, target, _reference, targetSchema) => {
-      await target.transaction([{ sql: schemaSql }]);
+      await target.transaction(canonicalSchemaStatements);
 
       const tables = await target.queryRows<{ table_name: string }>(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name",
@@ -469,6 +477,8 @@ integrationTest(
           'idx_wf_portfolio_equity_run_time',
           'idx_instruments_enabled',
           'idx_decision_log_paper_idempotency',
+          'idx_backtest_runs_oos_validation',
+          'idx_wf_folds_strategy_run',
         ]),
       );
 
@@ -519,7 +529,7 @@ integrationTest(
   'canonical baseline keeps database objects server-side when Supabase roles exist',
   async () => {
     await withSchemas(async (_admin, target, _reference, targetSchema) => {
-      await target.transaction([{ sql: schemaSql }]);
+      await target.transaction(canonicalSchemaStatements);
       await target.transaction([
         {
           sql: 'CREATE TABLE baseline_future_privilege_probe (id BIGSERIAL PRIMARY KEY, note TEXT NOT NULL)',
@@ -614,7 +624,7 @@ integrationTest(
 
 integrationTest('empty database baseline equals canonical schema.sql structure', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-    await reference.transaction([{ sql: schemaSql }]);
+    await reference.transaction(canonicalSchemaStatements);
     await runMigrations(target, { plan });
     const comparison = await compareSchemaFingerprintsIgnoringTablesAndIndexes(
       reference,
@@ -628,7 +638,7 @@ integrationTest('empty database baseline equals canonical schema.sql structure',
     const rows = await target.queryRows<{ name: string; origin: string }>(
       'SELECT name, origin FROM schema_migrations ORDER BY name',
     );
-    expect(rows.filter((row) => row.origin === 'baseline')).toHaveLength(24);
+    expect(rows.filter((row) => row.origin === 'baseline')).toHaveLength(25);
   });
 });
 
@@ -636,8 +646,8 @@ integrationTest(
   'equivalent existing database is marked without replaying baseline or altering data',
   async () => {
     await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-      await target.transaction([{ sql: schemaSql }]);
-      await reference.transaction([{ sql: schemaSql }]);
+      await target.transaction(canonicalSchemaStatements);
+      await reference.transaction(canonicalSchemaStatements);
       await target.transaction([
         {
           sql: "INSERT INTO market_data (ativo, timeframe, open_time, open, high, low, close, volume) VALUES ('BTCUSDT', '1h', TIMESTAMPTZ '2026-01-01 00:00:00+00', 1, 1, 1, 1, 1)",
@@ -676,8 +686,8 @@ integrationTest(
 
 integrationTest('refuses to mark an existing database when schema comparison fails', async () => {
   await withSchemas(async (_admin, target, reference, targetSchema, referenceSchema) => {
-    await target.transaction([{ sql: schemaSql }]);
-    await reference.transaction([{ sql: schemaSql }]);
+    await target.transaction(canonicalSchemaStatements);
+    await reference.transaction(canonicalSchemaStatements);
     await target.transaction([{ sql: 'ALTER TABLE market_data ADD COLUMN baseline_probe TEXT' }]);
     await expect(
       runMigrations(target, {
