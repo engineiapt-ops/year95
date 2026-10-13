@@ -2,6 +2,9 @@ import { fileURLToPath } from 'node:url';
 import { defineWorkspace } from 'vitest/config';
 
 const unitAliases = {
+  '@year95/market-data': fileURLToPath(
+    new URL('./packages/market-data/src/index.ts', import.meta.url),
+  ),
   '@year95/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
   '@year95/persistence': fileURLToPath(
     new URL('./packages/persistence/src/index.ts', import.meta.url),

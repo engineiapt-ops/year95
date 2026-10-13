@@ -96,7 +96,11 @@ importers:
 
   packages/portfolio: {}
 
-  packages/providers: {}
+  packages/providers:
+    dependencies:
+      '@year95/market-data':
+        specifier: workspace:*
+        version: link:../market-data
 
   packages/quant: {}
 

@@ -81,3 +81,15 @@ docker run --rm -p 3000:3000 -e DATABASE_URL="$DATABASE_URL" -e CORS_ORIGINS="ht
 ```
 
 The `API Docker` GitHub Actions workflow builds the image for API-related pull requests.
+
+## Binance Spot market-data adapter
+
+`@year95/providers` exports `BinanceSpotProvider`, which uses the injected `BINANCE_BASE_URL` value and the public Binance Spot `/api/v3/klines` endpoint. It does not read `process.env` during module import and requires no Binance credentials.
+
+- This initial adapter accepts only the verified `BTCUSDT` instrument and the `1h`, `4h`, and `1d` intervals.
+- Kline responses are validated before mapping to the provider-neutral `MarketCandle` contract. Candles whose close time is still in the future are excluded; invalid OHLCV, timestamps, duplicate candles, unsupported symbols, and invalid response shapes fail closed.
+- `getLatestCandles` rejects missing data and stale data. The latest closed candle must be within 1.5 times its timeframe, preserving the freshness rule recovered from the legacy `src/marketdata/quality.ts` and `src/marketdata/quality.test.ts`.
+- `getHistory` pages backward in bounded chunks, up to 50,000 candles, and returns closed records in chronological order.
+- This PR adds the adapter and contracts only. It does not add an HTTP market-data route, persist candles, generate decisions, or create paper trades; those require separately scoped work.
+
+The adapter receives its transport, clock, base URL, and timeout through its constructor so tests can validate behavior without external network access.
