@@ -207,12 +207,9 @@ export async function compareSchemaFingerprintsIgnoringTablesAndIndexes(
   );
 }
 
-
 export type SchemaFingerprintCategory = keyof SchemaFingerprint;
 export type SchemaDifferenceType =
-  | 'extra in database'
-  | 'missing in database'
-  | 'definition different';
+  'extra in database' | 'missing in database' | 'definition different';
 
 export interface SchemaObjectDifference {
   category: SchemaFingerprintCategory;
@@ -268,22 +265,12 @@ const OBJECT_KEY_FIELDS: Record<SchemaFingerprintCategory, readonly string[]> = 
   triggers: ['table_name', 'trigger_name'],
 };
 
-function getObjectKey(
-  category: SchemaFingerprintCategory,
-  row: Record<string, unknown>,
-): string {
-  return OBJECT_KEY_FIELDS[category]
-    .map((field) => String(row[field] ?? '<missing>'))
-    .join('.');
+function getObjectKey(category: SchemaFingerprintCategory, row: Record<string, unknown>): string {
+  return OBJECT_KEY_FIELDS[category].map((field) => String(row[field] ?? '<missing>')).join('.');
 }
 
-function getObjectLabel(
-  category: SchemaFingerprintCategory,
-  row: Record<string, unknown>,
-): string {
-  return OBJECT_KEY_FIELDS[category]
-    .map((field) => String(row[field] ?? '<missing>'))
-    .join('.');
+function getObjectLabel(category: SchemaFingerprintCategory, row: Record<string, unknown>): string {
+  return OBJECT_KEY_FIELDS[category].map((field) => String(row[field] ?? '<missing>')).join('.');
 }
 
 function sameFingerprintValue(left: unknown, right: unknown): boolean {
@@ -389,11 +376,13 @@ export function compareLiveSchemaFingerprints(
 
   // Keep the existing canonical comparison exact for all non-identity objects.
   // Triggers are deliberately never filtered, even when attached to an identity table.
-  const canonicalExpectedFiltered = filterFingerprint(canonicalExpected, (category, row) =>
-    category === 'triggers' || !identityTables.has(String(row.table_name ?? '')),
+  const canonicalExpectedFiltered = filterFingerprint(
+    canonicalExpected,
+    (category, row) => category === 'triggers' || !identityTables.has(String(row.table_name ?? '')),
   );
-  const liveActualFiltered = filterFingerprint(liveActual, (category, row) =>
-    category === 'triggers' || !identityTables.has(String(row.table_name ?? '')),
+  const liveActualFiltered = filterFingerprint(
+    liveActual,
+    (category, row) => category === 'triggers' || !identityTables.has(String(row.table_name ?? '')),
   );
   const unexpected: SchemaObjectDifference[] = collectFingerprintDifferences(
     canonicalExpectedFiltered,
@@ -402,11 +391,15 @@ export function compareLiveSchemaFingerprints(
 
   // Treat migration 027 itself as the source of truth for the two expected tables.
   // This detects missing tables/columns/constraints/indexes and any definition drift.
-  const identityExpected = filterFingerprint(migration027Expected, (category, row) =>
-    expectedCategories.has(category) && identityTables.has(String(row.table_name ?? '')),
+  const identityExpected = filterFingerprint(
+    migration027Expected,
+    (category, row) =>
+      expectedCategories.has(category) && identityTables.has(String(row.table_name ?? '')),
   );
-  const identityActual = filterFingerprint(liveActual, (category, row) =>
-    expectedCategories.has(category) && identityTables.has(String(row.table_name ?? '')),
+  const identityActual = filterFingerprint(
+    liveActual,
+    (category, row) =>
+      expectedCategories.has(category) && identityTables.has(String(row.table_name ?? '')),
   );
   const identityDifferences = collectFingerprintDifferences(identityExpected, identityActual);
   unexpected.push(...identityDifferences);
