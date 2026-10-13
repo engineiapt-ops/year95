@@ -38,7 +38,7 @@ jobs:
         run: >-
           pnpm exec prettier --write
           apps/web package.json packages/contracts/src/index.ts
-          vitest.workspace.ts .env.example .github/workflows/ci.yml
+          vitest.workspace.ts .github/workflows/ci.yml
           docs/BRANCH-PROTECTION.md docs/LOCAL-WEB-AUTH.md
           .github/workflows/_temporary-web-format.yml
       - name: Commit formatting changes
