@@ -199,8 +199,8 @@ jobs:
             {
               echo "## Preflight aborted: unexpected pending migration set"
               echo
-              echo "- Expected: `$EXPECTED_PENDING`"
-              echo "- Actual: `$actual_pending`"
+              echo "- Expected: \`$EXPECTED_PENDING\`"
+              echo "- Actual: \`$actual_pending\`"
               echo
               echo "No dump or migration was started."
               echo
@@ -240,16 +240,16 @@ jobs:
           {
             echo "## Pre-migration state"
             echo
-            echo "- Commit: `$(git rev-parse HEAD)`"
-            echo "- PostgreSQL server: `$SERVER_VERSION`"
-            echo "- Connection mode: `$CONNECTION_MODE`"
-            echo "- Expected pending: `$EXPECTED_PENDING`"
-            echo "- Actual pending: `$actual_pending`"
-            echo "- Constraint before: `$constraint_definition` (type=$constraint_type, validated=$constraint_validated)"
-            echo "- Row counts before: `benchmark_results=$pre_benchmark_rows`, `backtest_runs=$pre_backtest_rows`, `walk_forward_folds=$pre_wf_rows`"
-            echo "- Identity tables absent before: `allowed_emails=$allowed_emails_exists`, `user_profiles=$user_profiles_exists`"
-            echo "- Transactions open over 1 minute: `$long_transactions`"
-            echo "- Locks on `auth.users`: `$auth_users_locks`"
+            echo "- Commit: \`$(git rev-parse HEAD)\`"
+            echo "- PostgreSQL server: \`$SERVER_VERSION\`"
+            echo "- Connection mode: \`$CONNECTION_MODE\`"
+            echo "- Expected pending: \`$EXPECTED_PENDING\`"
+            echo "- Actual pending: \`$actual_pending\`"
+            echo "- Constraint before: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
+            echo "- Row counts before: \`benchmark_results=$pre_benchmark_rows\`, \`backtest_runs=$pre_backtest_rows\`, \`walk_forward_folds=$pre_wf_rows\`"
+            echo "- Identity tables absent before: \`allowed_emails=$allowed_emails_exists\`, \`user_profiles=$user_profiles_exists\`"
+            echo "- Transactions open over 1 minute: \`$long_transactions\`"
+            echo "- Locks on \`auth.users\`: \`$auth_users_locks\`"
             echo
             echo "### Current ledger (name | checksum | origin)"
             echo
@@ -333,14 +333,14 @@ jobs:
           {
             echo "## Backup validation"
             echo
-            echo "- Scope: `public` schema, custom format, schema and data"
-            echo "- PostgreSQL server: `$SERVER_VERSION`"
-            echo "- Client: `$PG_DUMP_VERSION` (major version equal to or higher than server)"
-            echo "- Dump size: `$dump_human ($dump_bytes bytes)`"
-            echo "- SHA-256: `$dump_sha256`"
+            echo "- Scope: \`public\` schema, custom format, schema and data"
+            echo "- PostgreSQL server: \`$SERVER_VERSION\`"
+            echo "- Client: \`$PG_DUMP_VERSION\` (major version equal to or higher than server)"
+            echo "- Dump size: \`$dump_human ($dump_bytes bytes)\`"
+            echo "- SHA-256: \`$dump_sha256\`"
             echo "- File non-empty: PASS"
-            echo "- `pg_restore --list`: PASS"
-            echo "- Required table and table-data entries (`benchmark_results`, `backtest_runs`, `walk_forward_folds`): PASS"
+            echo "- \`pg_restore --list\`: PASS"
+            echo "- Required table and table-data entries (\`benchmark_results\`, \`backtest_runs\`, \`walk_forward_folds\`): PASS"
             echo "- Artifact retention: 7 days; repository privacy was verified before dump creation."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -367,9 +367,9 @@ jobs:
             {
               echo "## Migration runner"
               echo
-              echo "- Command executed exactly once: `pnpm --filter @year95/persistence migrate`"
+              echo "- Command executed exactly once: \`pnpm --filter @year95/persistence migrate\`"
               echo "- Result: PASS"
-              echo "- Expected pending migrations: `$EXPECTED_PENDING`"
+              echo "- Expected pending migrations: \`$EXPECTED_PENDING\`"
             } >> "$GITHUB_STEP_SUMMARY"
           else
             runner_status=$?
@@ -382,7 +382,7 @@ jobs:
             {
               echo "## Migration runner failed"
               echo
-              echo "- Exit code: `$runner_status`"
+              echo "- Exit code: \`$runner_status\`"
               echo "- Retry: none"
               echo "- Current ledger after failure (name | checksum | origin):"
               echo
@@ -475,12 +475,12 @@ jobs:
             echo "## Post-migration state"
             echo
             echo "- Migration runner result: PASS"
-            echo "- Migrations in ledger: `$actual_migration_names`"
-            echo "- Dump artifact size: `$DUMP_BYTES bytes`"
-            echo "- Dump SHA-256: `$DUMP_SHA256`"
-            echo "- Constraint after: `$constraint_definition` (type=$constraint_type, validated=$constraint_validated)"
-            echo "- Row counts after: `benchmark_results=$post_benchmark_rows`, `backtest_runs=$post_backtest_rows`, `walk_forward_folds=$post_wf_rows`"
-            echo "- New tables: `allowed_emails=$allowed_emails_rows rows`, `user_profiles=$user_profiles_rows rows`"
+            echo "- Migrations in ledger: \`$actual_migration_names\`"
+            echo "- Dump artifact size: \`$DUMP_BYTES bytes\`"
+            echo "- Dump SHA-256: \`$DUMP_SHA256\`"
+            echo "- Constraint after: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
+            echo "- Row counts after: \`benchmark_results=$post_benchmark_rows\`, \`backtest_runs=$post_backtest_rows\`, \`walk_forward_folds=$post_wf_rows\`"
+            echo "- New tables: \`allowed_emails=$allowed_emails_rows rows\`, \`user_profiles=$user_profiles_rows rows\`"
             echo
             echo "### Current ledger after migration (name | checksum | origin)"
             echo
