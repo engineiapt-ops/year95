@@ -22,9 +22,10 @@ export default tseslint.config(
     ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**'],
   },
   {
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'apps/*/scripts/**/*.mjs'],
     languageOptions: {
       globals: {
+        Buffer: 'readonly',
         console: 'readonly',
         process: 'readonly',
       },
@@ -39,7 +40,7 @@ export default tseslint.config(
   },
   {
     files: ['apps/**/*.{js,mjs,cjs,ts,tsx}', 'packages/**/*.{js,mjs,cjs,ts,tsx}'],
-    ignores: ['apps/*/src/main.ts'],
+    ignores: ['apps/*/src/main.ts', 'apps/*/scripts/**/*.mjs'],
     rules: {
       'no-restricted-syntax': ['error', processEnvSelector, ...forbiddenIdentifiers],
     },
