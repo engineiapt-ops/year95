@@ -139,8 +139,7 @@ jobs:
           VITE_API_BASE_URL="$API_BASE_URL" \
           VITE_SUPABASE_URL="$SUPABASE_URL" \
           VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-          pnpm --filter @year95/web dev -- --port 5173 \
-            > "$RUNNER_TEMP/year95-web.log" 2>&1 &
+          pnpm --filter @year95/web dev > "$RUNNER_TEMP/year95-web.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/year95-web.pid"
           for attempt in $(seq 1 45); do
             if curl --silent --show-error --fail "$WEB_BASE_URL/login" >/dev/null; then
