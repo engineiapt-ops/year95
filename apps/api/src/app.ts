@@ -36,7 +36,7 @@ interface RateWindow {
 interface RateLimitDecision {
   allowed: boolean;
   remaining: number;
-  resetAtSeconds: number;
+  resetAfterSeconds: number;
   retryAfterSeconds: number;
 }
 
@@ -157,7 +157,7 @@ function consumeRateLimit(
   return {
     allowed: window.count <= max,
     remaining,
-    resetAtSeconds: Math.ceil(resetAtMs / 1000),
+    resetAfterSeconds: Math.max(1, Math.ceil((resetAtMs - now) / 1000)),
     retryAfterSeconds: Math.max(1, Math.ceil((resetAtMs - now) / 1000)),
   };
 }
@@ -170,7 +170,7 @@ function responseForLimit(
   reply
     .header('RateLimit-Limit', String(max))
     .header('RateLimit-Remaining', String(decision.remaining))
-    .header('RateLimit-Reset', String(decision.resetAtSeconds));
+    .header('RateLimit-Reset', String(decision.resetAfterSeconds));
 
   if (decision.allowed) return reply;
 
