@@ -97,7 +97,7 @@ describe('YEAR95 API shell contracts', () => {
       const app = buildApp({
         config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'fatal' }),
       });
-  
+
       try {
         const response = await app.inject({
           method: 'GET',
