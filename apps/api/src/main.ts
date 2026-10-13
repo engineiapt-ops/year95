@@ -1,8 +1,11 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { FastifyInstance } from 'fastify';
 import { loadConfig, type ConfigEnv } from '@year95/config';
 import { PgAllowlistRepository, PgHealthRepository, createPgPool } from '@year95/persistence';
-import { createApiApp } from './app.js';
+import { buildApp } from './app.js';
+
+const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 export async function startApi(env: ConfigEnv): Promise<void> {
   const config = loadConfig('api', env);
@@ -13,7 +16,7 @@ export async function startApi(env: ConfigEnv): Promise<void> {
         ...(config.DATABASE_CA_CERT_PEM ? { caCertPem: config.DATABASE_CA_CERT_PEM } : {}),
       })
     : undefined;
-  const app = createApiApp({
+  const app = buildApp({
     config,
     ...(pool
       ? {
@@ -32,6 +35,38 @@ export async function startApi(env: ConfigEnv): Promise<void> {
   }
 
   await app.listen({ host: '0.0.0.0', port: config.PORT });
+  installGracefulShutdown(app);
+}
+
+function installGracefulShutdown(app: FastifyInstance): void {
+  let shutdownPromise: Promise<void> | undefined;
+
+  const shutdown = (signal: NodeJS.Signals): void => {
+    if (shutdownPromise) return;
+
+    app.log.info({ signal }, 'API graceful shutdown started');
+    const timeout = setTimeout(() => {
+      app.log.fatal({ signal, timeoutMs: SHUTDOWN_TIMEOUT_MS }, 'API graceful shutdown timed out');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    timeout.unref();
+
+    shutdownPromise = app
+      .close()
+      .then(() => {
+        app.log.info({ signal }, 'API graceful shutdown completed');
+      })
+      .catch(() => {
+        app.log.error({ signal }, 'API graceful shutdown failed');
+        process.exitCode = 1;
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
+  };
+
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 const invokedPath = process.argv[1];
