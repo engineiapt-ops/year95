@@ -108,8 +108,8 @@ jobs:
             echo "::error::For Supabase, use the session pooler on port 5432 if direct IPv6 connectivity is unavailable."
             exit 1
           }
-          server_major="$(printf '%s' "$server_version" | sed -E 's/^([0-9]+)\\..*/\\1/')"
-          server_minor="$(printf '%s' "$server_version" | sed -E 's/^[0-9]+\\.([0-9]+).*/\\1/')"
+          server_major="$(printf '%s' "$server_version" | sed -E 's/^([0-9]+)\..*/\1/')"
+          server_minor="$(printf '%s' "$server_version" | sed -E 's/^[0-9]+\.([0-9]+).*/\1/')"
           if [[ ! "$server_major" =~ ^[0-9]+$ || ! "$server_minor" =~ ^[0-9]+$ ]]; then
             echo "::error::Could not parse the PostgreSQL server major/minor version."
             exit 1
