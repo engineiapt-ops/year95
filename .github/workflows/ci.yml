@@ -66,6 +66,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Debug Prettier output for Auth smoke script
+        run: |
+          pnpm exec prettier apps/web/scripts/supabase-auth-smoke.mjs > "$RUNNER_TEMP/supabase-auth-smoke.formatted.mjs"
+          diff -u apps/web/scripts/supabase-auth-smoke.mjs "$RUNNER_TEMP/supabase-auth-smoke.formatted.mjs" || true
+          echo '--- FORMATTED SOURCE START ---'
+          cat "$RUNNER_TEMP/supabase-auth-smoke.formatted.mjs"
+          echo '--- FORMATTED SOURCE END ---'
+          exit 1
       - name: Build then lint on a clean checkout
         run: pnpm build && pnpm lint
       - name: Format check
