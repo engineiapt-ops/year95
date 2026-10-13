@@ -112,6 +112,17 @@ Future migrations `024+` are forward-only and additive. They must not use:
 
 Any required schema evolution must preserve existing data and semantics.
 
+#### 2.11.1 Narrow exception: widening a CHECK constraint
+
+A migration may use `DROP CONSTRAINT IF EXISTS` only to replace a constraint whose PostgreSQL type is `CHECK`, and only when all of the following conditions are met:
+
+- The existing constraint is verified to be of type `CHECK`.
+- The replacement definition widens or preserves the permitted value set; it must not restrict the existing set.
+- The migration is verified not to invalidate any existing row.
+- The migration includes an explicit justification and a reference to the divergence report that requires the replacement.
+
+This exception authorizes no other `DROP` operation, object type, table, or constraint change. All other prohibitions on `DROP`, `TRUNCATE` and `RENAME` remain in force. The exception is proposed for human review in PR “Ampliar constraint de estratégia em benchmark_results (exceção ao contrato)” in response to the live-schema divergence documented by GitHub Actions run `38335232604`; it does not authorize applying that migration to Supabase before human approval.
+
 ### 2.12 Layer boundaries
 
 The dependency direction is:
