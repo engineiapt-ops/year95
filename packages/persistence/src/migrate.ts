@@ -137,7 +137,10 @@ async function compareExisting(
 function assertComparisonEquivalent(result: SchemaComparison): void {
   if (!result.equivalent) {
     const details = result.differences?.length ? ': ' + result.differences.join('; ') : '';
-    throw new Error('Existing database does not match db/baseline/schema.sql' + details);
+    throw new Error(
+      'Existing database does not match db/baseline/schema.sql (canonical schema plus forward migrations)' +
+        details,
+    );
   }
 }
 async function assertEquivalent(
@@ -280,10 +283,10 @@ async function upgradeLegacyTracker(
 }
 
 /**
- * Empty databases are bootstrapped from the canonical final schema.sql.
- * Historical 001–023 files are checksum-recorded as baseline history, never
- * executed against that final schema. Existing databases are only marked after
- * a comparator proves structural equivalence.
+ * Empty databases are bootstrapped from the immutable final schema.sql and then
+ * brought forward by ordered additive migrations 024+. Historical 001–023 files
+ * are checksum-recorded as baseline history, never re-executed against that final
+ * schema. Existing databases are only marked after a comparator proves equivalence.
  */
 export async function runMigrations(
   db: MigrationDatabase,

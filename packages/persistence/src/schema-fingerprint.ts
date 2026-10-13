@@ -35,13 +35,15 @@ export async function schemaFingerprint(
     ].join(' '),
     [schemaName],
   );
+  // Column ordinal is deliberately ignored: ALTER TABLE ADD COLUMN appends fields,
+  // while named-column semantics are unchanged. Compare full definitions by name.
   const columns = await db.queryRows(
     [
-      'SELECT table_name, column_name, ordinal_position, column_default, is_nullable, data_type,',
+      'SELECT table_name, column_name, column_default, is_nullable, data_type,',
       'udt_name, character_maximum_length, numeric_precision, numeric_scale, datetime_precision,',
       'is_identity, identity_generation, is_generated, generation_expression',
       "FROM information_schema.columns WHERE table_schema = $1 AND table_name <> 'schema_migrations'",
-      'ORDER BY table_name, ordinal_position',
+      'ORDER BY table_name, column_name',
     ].join(' '),
     [schemaName],
   );

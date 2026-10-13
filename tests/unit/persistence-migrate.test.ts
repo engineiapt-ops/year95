@@ -35,7 +35,7 @@ describe('forward-only migration metadata', () => {
       ),
     ).toThrow(/unknown applied migration/i);
   });
-  test('loads canonical schema plus 23 immutable historical migration checksums', async () => {
+  test('keeps schema.sql and 23 immutable historical migration checksums', async () => {
     const plan = await loadMigrationPlan(rootDir);
     expect(plan.baselineRecords).toHaveLength(24);
     expect(plan.baselineRecords[0]?.name).toBe('schema.sql');
@@ -47,13 +47,14 @@ describe('forward-only migration metadata', () => {
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
   });
-  test('loads additive migrations 024-027 with migration origin', async () => {
+  test('loads additive migrations 024-028 with migration origin', async () => {
     const plan = await loadMigrationPlan(rootDir);
     expect(plan.migrations.map(({ record }) => record.name)).toEqual([
       '024_add_instruments.sql',
       '025_add_decision_log_paper_idempotency.sql',
       '026_enable_rls_and_pin_audit_search_path.sql',
       '027_add_identity_repository_tables.sql',
+      '028_reconcile_historical_indexes.sql',
     ]);
     expect(plan.migrations[0]?.record.origin).toBe('migration');
     expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
@@ -79,6 +80,16 @@ describe('forward-only migration metadata', () => {
     expect(plan.migrations[3]?.sql).toContain('ENABLE ROW LEVEL SECURITY');
     expect(
       plan.allRecords.some((record) => record.name === '027_add_identity_repository_tables.sql'),
+    ).toBe(true);
+    expect(plan.migrations[4]?.record.origin).toBe('migration');
+    expect(plan.migrations[4]?.sql).toContain(
+      'CREATE INDEX IF NOT EXISTS idx_backtest_runs_oos_validation',
+    );
+    expect(plan.migrations[4]?.sql).toContain(
+      'CREATE INDEX IF NOT EXISTS idx_wf_folds_strategy_run',
+    );
+    expect(
+      plan.allRecords.some((record) => record.name === '028_reconcile_historical_indexes.sql'),
     ).toBe(true);
   });
   test('documents exact SHA-256 checksums of all immutable baseline files', async () => {
