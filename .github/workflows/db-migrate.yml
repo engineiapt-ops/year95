@@ -197,9 +197,9 @@ jobs:
               echo
               echo "### Ledger observed"
               echo
-              echo ' \`\`\`text'
+              echo ' ```text'
               printf '%s\n' "$ledger_before"
-              echo ' \`\`\`'
+              echo ' ```'
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Pending migration mismatch. Expected '$EXPECTED_PENDING'; actual '$actual_pending'. No changes made."
             exit 1
