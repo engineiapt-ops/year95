@@ -109,6 +109,7 @@ jobs:
             exit 1
           }
           server_major="${server_version%%.*}"
+          server_minor="$(printf '%s' "$server_version" | cut -d. -f2)"
           if [[ ! "$server_major" =~ ^[0-9]+$ ]]; then
             echo "::error::Could not determine the PostgreSQL server major version."
             exit 1
@@ -129,9 +130,14 @@ jobs:
             exit 1
           fi
           pg_dump_version="$("$pg_bin_dir/pg_dump" --version)"
-          client_major="$(printf '%s' "$pg_dump_version" | awk '{print $3}' | cut -d. -f1)"
-          if [[ ! "$client_major" =~ ^[0-9]+$ ]] || (( client_major < server_major )); then
-            echo "::error::pg_dump version is older than the PostgreSQL server. Backup is blocked."
+          client_release="$(printf '%s' "$pg_dump_version" | awk '{print $3}')"
+          client_major="$(printf '%s' "$client_release" | cut -d. -f1)"
+          client_minor="$(printf '%s' "$client_release" | cut -d. -f2)"
+          if [[ ! "$client_major" =~ ^[0-9]+$ || ! "$client_minor" =~ ^[0-9]+$ ||
+                ! "$server_minor" =~ ^[0-9]+$ ]] ||
+             (( client_major < server_major )) ||
+             { (( client_major == server_major )) && (( client_minor < server_minor )); }; then
+            echo "::error::pg_dump major/minor version is older than SHOW server_version. Backup is blocked."
             exit 1
           fi
 
