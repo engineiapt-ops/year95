@@ -30,6 +30,11 @@ export async function loadMigrationPlan(rootDir) {
     'schema.sql',
     'baseline',
   );
+  const schemaCorrectionsEntry = await readSqlFile(
+    path.join(baselineDir, 'schema-corrections.sql'),
+    'schema-corrections.sql',
+    'baseline',
+  );
   const baselineFiles = await Promise.all(
     baselineNames.map((name) => readSqlFile(path.join(baselineDir, name), name, 'baseline')),
   );
@@ -53,10 +58,15 @@ export async function loadMigrationPlan(rootDir) {
       return { record: migration.record, sql: migration.sql };
     }),
   );
-  const baselineRecords = [schemaEntry.record, ...baselineFiles.map((file) => file.record)];
+  const baselineRecords = [
+    schemaEntry.record,
+    schemaCorrectionsEntry.record,
+    ...baselineFiles.map((file) => file.record),
+  ];
   migrations.sort((left, right) => left.record.name.localeCompare(right.record.name));
   return {
     baselineSchemaSql: schemaEntry.sql,
+    baselineCorrectionsSql: schemaCorrectionsEntry.sql,
     baselineRecords,
     migrations,
     allRecords: [...baselineRecords, ...migrations.map(({ record }) => record)],
