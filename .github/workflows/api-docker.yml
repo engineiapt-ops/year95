@@ -3,27 +3,27 @@ name: API Docker
 on:
   pull_request:
     paths:
-      - "apps/api/**"
-      - "packages/config/**"
-      - "packages/contracts/**"
-      - "packages/persistence/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - ".dockerignore"
-      - ".github/workflows/api-docker.yml"
+      - apps/api/**
+      - packages/config/**
+      - packages/contracts/**
+      - packages/persistence/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .dockerignore
+      - .github/workflows/api-docker.yml
   push:
     branches: [main]
     paths:
-      - "apps/api/**"
-      - "packages/config/**"
-      - "packages/contracts/**"
-      - "packages/persistence/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - ".dockerignore"
-      - ".github/workflows/api-docker.yml"
+      - apps/api/**
+      - packages/config/**
+      - packages/contracts/**
+      - packages/persistence/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .dockerignore
+      - .github/workflows/api-docker.yml
 
 permissions:
   contents: read
