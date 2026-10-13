@@ -11,7 +11,7 @@ The rules below are the intended governance policy, not a statement that GitHub 
 Configure a branch protection rule or ruleset targeting `main` with:
 
 - Require pull requests; prohibit direct pushes and force pushes; prevent branch deletion.
-- Require the checks `install`, `typecheck`, `lint`, `architecture`, `unit`, `contract`, `integration`, `build`, and `secret-scan`.
+- Require the checks `install`, `typecheck`, `lint`, `architecture`, `unit`, `component`, `contract`, `integration`, `build`, and `secret-scan`.
 - Require branches to be up to date and conversations to be resolved.
 - Apply the rules to administrators and disable bypass where supported.
 - Do not require CODEOWNERS approval while `CODEOWNERS` has only the repository owner; self-approval is not a valid independent review. Add an approval requirement only when a separate eligible reviewer exists.
@@ -27,7 +27,7 @@ For every change:
 
 1. Work on one feature branch and one PR at a time. Do not intentionally commit or push directly to `main`.
 2. Review the complete diff against the current `main`; verify the PR contains only its stated scope and no secrets, destructive database changes, live-trading capability, or forbidden layer dependencies.
-3. Wait for the latest CI run to finish on the exact PR head SHA. Require all nine checks above to pass. If API-related paths changed, also require the API Docker build to pass. Any new commit invalidates the previous head's results; re-check the new SHA.
+3. Wait for the latest CI run to finish on the exact PR head SHA. Require all ten checks above to pass. If API-related paths changed, also require the API Docker build to pass. Any new commit invalidates the previous head's results; re-check the new SHA.
 4. Review all comments and inline review threads. Resolve each issue or document why it does not require a code change.
 5. Use squash merge only after the preceding gates are green. Do not merge while any required run is pending, failed, cancelled, or for an older SHA.
 6. After merge, verify the PR is merged, confirm `main` points to the resulting merge commit, and verify post-merge CI. Verify API Docker too when it is triggered by the changed paths.

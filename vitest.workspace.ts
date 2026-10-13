@@ -13,6 +13,22 @@ const unitAliases = {
 
 export default defineWorkspace([
   {
+    resolve: {
+      alias: {
+        '@year95/config': fileURLToPath(new URL('./packages/config/src/index.ts', import.meta.url)),
+        '@year95/contracts': fileURLToPath(
+          new URL('./packages/contracts/src/index.ts', import.meta.url),
+        ),
+      },
+    },
+    test: {
+      name: 'component',
+      include: ['apps/web/tests/**/*.test.tsx'],
+      environment: 'jsdom',
+      globals: true,
+    },
+  },
+  {
     resolve: { alias: unitAliases },
     test: {
       name: 'unit',
