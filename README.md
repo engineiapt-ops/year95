@@ -59,7 +59,6 @@ The legacy ai-financial-analyst repository is reference-only. Its behavior and s
 
 YEAR95 is being implemented incrementally from the approved project contract. Each PR is limited to its declared scope.
 
-
 ## API shell and Docker
 
 The API is built through the injectable `buildApp(options)` factory in `apps/api/src/app.ts`. Existing `createApiApp` imports remain supported. The HTTP shell provides:
