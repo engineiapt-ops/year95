@@ -42,7 +42,9 @@ async function main() {
         normalizedRawSql === expectedCheckReplacementSql;
       if (!approvedCheckConstraintReplacement) {
         throw new Error(
-          'Destructive DDL is prohibited in ' + file + '. db/baseline is intentionally not scanned.',
+          'Destructive DDL is prohibited in ' +
+            file +
+            '. db/baseline is intentionally not scanned.',
         );
       }
     }
