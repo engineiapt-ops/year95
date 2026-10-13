@@ -109,6 +109,8 @@ export function DashboardPage({ apiClient }: DashboardPageProps) {
     };
   }, [client]);
 
+  const identityDetail = identity.detail ?? user?.email;
+
   return (
     <main className="dashboard">
       <header className="dashboard-header">
@@ -138,7 +140,7 @@ export function DashboardPage({ apiClient }: DashboardPageProps) {
           title="Usuário autenticado"
           value={identity.value}
           tone={identity.tone}
-          {...((identity.detail ?? user?.email) ? { detail: identity.detail ?? user?.email } : {})}
+          {...(identityDetail ? { detail: identityDetail } : {})}
         />
       </div>
       <p className="dashboard-note">
