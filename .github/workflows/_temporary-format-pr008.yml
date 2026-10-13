@@ -1,0 +1,45 @@
+name: Temporary PR008 formatter
+
+on:
+  push:
+    branches:
+      - feat/pr-008-binance-spot-market-data
+    paths:
+      - .github/workflows/_temporary-format-pr008.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/pr-008-binance-spot-market-data
+          persist-credentials: true
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.9"
+          run_install: false
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply repository Prettier configuration
+        run: pnpm exec prettier packages/providers/src/binance-spot.ts packages/providers/src/index.ts README.md tests/unit/binance-spot.test.ts --write
+      - name: Commit formatting
+        run: |
+          if git diff --quiet; then
+            echo "Files already match Prettier."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/providers/src/binance-spot.ts packages/providers/src/index.ts README.md tests/unit/binance-spot.test.ts
+          git commit -m "style(market-data): apply repository Prettier formatting"
+          git push origin HEAD:feat/pr-008-binance-spot-market-data
