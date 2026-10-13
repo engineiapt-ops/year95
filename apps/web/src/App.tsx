@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import type { AuthClient } from './auth/AuthProvider.js';
+import type { ApiClientOptions } from './lib/apiClient.js';
 import { AuthProvider } from './auth/AuthProvider.js';
 import { ProtectedRoute } from './auth/ProtectedRoute.js';
 import type { DashboardApi } from './pages/DashboardPage.js';
@@ -9,9 +10,10 @@ import { LoginPage } from './pages/LoginPage.js';
 export interface AppProps {
   readonly authClient?: AuthClient | null;
   readonly apiClient?: DashboardApi;
+  readonly apiClientOptions?: Pick<ApiClientOptions, 'baseUrl' | 'fetchImpl'>;
 }
 
-export function App({ authClient, apiClient }: AppProps) {
+export function App({ authClient, apiClient, apiClientOptions }: AppProps) {
   return (
     <BrowserRouter>
       <AuthProvider {...(authClient !== undefined ? { client: authClient } : {})}>
@@ -21,7 +23,10 @@ export function App({ authClient, apiClient }: AppProps) {
             path="/"
             element={
               <ProtectedRoute>
-                <DashboardPage {...(apiClient ? { apiClient } : {})} />
+                <DashboardPage
+                  {...(apiClient ? { apiClient } : {})}
+                  {...(apiClientOptions ? { apiClientOptions } : {})}
+                />
               </ProtectedRoute>
             }
           />

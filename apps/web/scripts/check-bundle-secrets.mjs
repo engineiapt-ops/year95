@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = path.join(appRoot, 'src');
-const bundleRoot = path.join(appRoot, 'dist');
+const bundleRoot = process.env.YEAR95_WEB_BUNDLE_ROOT
+  ? path.resolve(process.env.YEAR95_WEB_BUNDLE_ROOT)
+  : path.join(appRoot, 'dist');
 const allowedViteEnv = new Set([
   'DEV',
   'PROD',
@@ -27,6 +29,7 @@ const forbiddenMarkers = [
   /\bsk-[A-Za-z0-9_-]{20,}\b/,
 ];
 const jwtPattern = /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
+const publishableKeyPattern = /^sb_publishable_[A-Za-z0-9_-]{8,}$/;
 
 async function listFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -42,7 +45,9 @@ async function listFiles(directory) {
 function decodeJwtPayload(token) {
   try {
     const segment = token.split('.')[1];
-    return segment ? JSON.parse(Buffer.from(segment, 'base64url').toString('utf8')) : null;
+    if (!segment) return null;
+    const payload = JSON.parse(Buffer.from(segment, 'base64url').toString('utf8'));
+    return payload && typeof payload === 'object' ? payload : null;
   } catch {
     return null;
   }
@@ -54,29 +59,43 @@ async function assertOnlyPublicViteEnv() {
   for (const file of files.filter((name) => /\.(?:ts|tsx|js|jsx)$/.test(name))) {
     const source = await readFile(file, 'utf8');
     for (const match of source.matchAll(/import\.meta\.env\.([A-Za-z0-9_]+)/g)) {
-      if (!allowedViteEnv.has(match[1]))
+      if (!allowedViteEnv.has(match[1])) {
         violations.push(`${path.relative(appRoot, file)}: import.meta.env.${match[1]}`);
+      }
     }
   }
-  if (violations.length)
+  if (violations.length) {
     throw new Error(`Non-public Vite environment references found:\n${violations.join('\n')}`);
+  }
 }
 
 async function assertSafeBundle() {
   const files = await listFiles(bundleRoot);
   const textFiles = files.filter((name) => /\.(?:js|html|css|json|svg|map)$/.test(name));
   if (textFiles.length === 0) throw new Error('No readable web bundle files were produced.');
-  const configuredAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+  const configuredAnonKey = process.env.VITE_SUPABASE_ANON_KEY?.trim() || undefined;
   const violations = [];
+
+  if (configuredAnonKey) {
+    const configuredPayload = decodeJwtPayload(configuredAnonKey);
+    if (configuredPayload) {
+      if (configuredPayload.role !== 'anon') {
+        violations.push('VITE_SUPABASE_ANON_KEY is a JWT with a non-anon role');
+      }
+    } else if (!publishableKeyPattern.test(configuredAnonKey)) {
+      violations.push('VITE_SUPABASE_ANON_KEY is not a recognized public key format');
+    }
+  }
 
   for (const file of textFiles) {
     const text = await readFile(file, 'utf8');
     for (const marker of forbiddenMarkers) {
-      if (marker.test(text))
+      if (marker.test(text)) {
         violations.push(`${path.relative(appRoot, file)} matched forbidden marker ${marker}`);
+      }
     }
     for (const token of text.match(jwtPattern) ?? []) {
-      if (configuredAnonKey && token === configuredAnonKey) continue;
       const payload = decodeJwtPayload(token);
       if (payload?.role !== 'anon') {
         violations.push(
@@ -85,8 +104,9 @@ async function assertSafeBundle() {
       }
     }
   }
-  if (violations.length)
+  if (violations.length) {
     throw new Error(`Web bundle secret-scan failed:\n${violations.join('\n')}`);
+  }
 }
 
 await assertOnlyPublicViteEnv();

@@ -12,6 +12,7 @@ export interface DashboardApi {
 
 export interface DashboardPageProps {
   readonly apiClient?: DashboardApi;
+  readonly apiClientOptions?: Pick<ApiClientOptions, 'baseUrl' | 'fetchImpl'>;
 }
 
 interface CardState {
@@ -22,17 +23,18 @@ interface CardState {
 
 const pendingState: CardState = { tone: 'loading', value: 'Carregando…' };
 
-export function DashboardPage({ apiClient }: DashboardPageProps) {
+export function DashboardPage({ apiClient, apiClientOptions }: DashboardPageProps) {
   const { user, session, signOut, expireSession } = useAuth();
   const client = useMemo<DashboardApi>(() => {
     if (apiClient) return apiClient;
     const options: ApiClientOptions = {
-      baseUrl: getApiBaseUrl(),
+      baseUrl: apiClientOptions?.baseUrl ?? getApiBaseUrl(),
       getAccessToken: () => session?.access_token ?? null,
       onUnauthorized: expireSession,
+      ...(apiClientOptions?.fetchImpl ? { fetchImpl: apiClientOptions.fetchImpl } : {}),
     };
     return new WebApiClient(options);
-  }, [apiClient, session?.access_token, expireSession]);
+  }, [apiClient, apiClientOptions, session?.access_token, expireSession]);
 
   const [health, setHealth] = useState<CardState>(pendingState);
   const [readiness, setReadiness] = useState<CardState>(pendingState);

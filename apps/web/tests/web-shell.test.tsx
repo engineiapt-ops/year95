@@ -2,11 +2,54 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App.js';
 import type { DashboardApi } from '../src/pages/DashboardPage.js';
+import type { FetchLike } from '../src/lib/apiClient.js';
 import { createMockAuthClient, createMockSession } from './auth-test-utils.js';
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
 
 afterEach(() => {
   window.history.replaceState({}, '', '/');
   vi.restoreAllMocks();
+
+  it('clears the session and redirects to login when the API rejects an expired JWT', async () => {
+    const authClient = createMockAuthClient(createMockSession());
+    const requestedPaths: string[] = [];
+    const fetchImpl: FetchLike = async (input) => {
+      const pathname = new URL(String(input)).pathname;
+      requestedPaths.push(pathname);
+      if (pathname === '/health') {
+        return jsonResponse({ status: 'ok', service: 'year95-api', version: '0.1.0' });
+      }
+      if (pathname === '/ready') {
+        return jsonResponse({
+          status: 'ok',
+          ready: true,
+          version: '0.1.0',
+          checks: { database: 'ok' },
+        });
+      }
+      return jsonResponse({
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired access token' },
+      }, 401);
+    };
+
+    render(
+      <App
+        authClient={authClient}
+        apiClientOptions={{ baseUrl: 'http://localhost:3000', fetchImpl }}
+      />,
+    );
+
+    expect(await screen.findByText('Sua sessão expirou. Entre novamente para continuar.')).toBeTruthy();
+    expect(screen.queryByText('Visão geral')).toBeNull();
+    expect(requestedPaths).toContain('/v1/me');
+  });
+
 });
 
 function makeApiClient(overrides: Partial<DashboardApi> = {}): DashboardApi {
