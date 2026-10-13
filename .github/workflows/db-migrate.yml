@@ -71,7 +71,12 @@ jobs:
           export PGCONNECT_TIMEOUT=10
           connection_mode="$(node --input-type=module <<'NODE'
           const raw = process.env.DATABASE_URL_MIGRATE;
-          const url = new URL(raw);
+          let url;
+          try {
+            url = new URL(raw);
+          } catch {
+            throw new Error('DATABASE_URL_MIGRATE is not a valid URL; its value is withheld.');
+          }
           if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
             throw new Error('DATABASE_URL_MIGRATE must be a PostgreSQL URL.');
           }
@@ -159,9 +164,49 @@ jobs:
               --command="BEGIN READ ONLY; ${statement}; COMMIT;"
           }
 
-          # Compare the caller's expected-pending list with the remote ledger before other preflight work.
+          # Compare expected_pending with the actual remote ledger before checksum and schema checks.
           ledger_before="$(readonly_query 'SELECT name, checksum, origin FROM public.schema_migrations ORDER BY name')"
-          declare -A applied_migrations=()
+          declare -A ledger_migration_names=()
+          while IFS=$'\t' read -r name checksum origin; do
+            [[ -n "$name" ]] || continue
+            if [[ -f "db/migrations/$name" ]]; then
+              ledger_migration_names["$name"]=1
+            fi
+          done <<< "$ledger_before"
+
+          migration_files=(db/migrations/*.sql)
+          pending_numbers=()
+          expected_post_names=()
+          for migration_path in "\${migration_files[@]}"; do
+            migration_name="\${migration_path##*/}"
+            migration_number="\${migration_name%%_*}"
+            expected_post_names+=("$migration_name")
+            if [[ -z "\${ledger_migration_names[$migration_name]+present}" ]]; then
+              pending_numbers+=("$migration_number")
+            fi
+          done
+          actual_pending="$(IFS=,; printf '%s' "\${pending_numbers[*]}")"
+          if [[ "$actual_pending" != "$EXPECTED_PENDING" ]]; then
+            {
+              echo "## Preflight aborted: unexpected pending migration set"
+              echo
+              echo "- Expected: \`$EXPECTED_PENDING\`"
+              echo "- Actual: \`$actual_pending\`"
+              echo
+              echo "No dump or migration was started."
+              echo
+              echo "### Ledger observed"
+              echo
+              echo ' \`\`\`text'
+              printf '%s\n' "$ledger_before"
+              echo ' \`\`\`'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Pending migration mismatch. Expected '$EXPECTED_PENDING'; actual '$actual_pending'. No changes made."
+            exit 1
+          fi
+          echo "Pending migration check passed: $actual_pending."
+
+          # Validate origin and SHA-256 for previously applied migrations after the pending-set guard.
           while IFS=$'\t' read -r name checksum origin; do
             [[ -n "$name" ]] || continue
             if [[ -f "db/migrations/$name" ]]; then
@@ -174,46 +219,12 @@ jobs:
                 echo "::error::Checksum mismatch for already-applied migration $name; refusing to continue."
                 exit 1
               fi
-              applied_migrations["$name"]=1
             elif [[ "$origin" == "migration" ]]; then
               echo "::error::Unknown applied migration '$name' is present in the remote ledger; refusing to continue."
               exit 1
             fi
           done <<< "$ledger_before"
 
-          migration_files=(db/migrations/*.sql)
-          pending_numbers=()
-          pending_names=()
-          expected_post_names=()
-          for migration_path in "${migration_files[@]}"; do
-            migration_name="${migration_path##*/}"
-            migration_number="${migration_name%%_*}"
-            expected_post_names+=("$migration_name")
-            if [[ -z "${applied_migrations[$migration_name]+present}" ]]; then
-              pending_numbers+=("$migration_number")
-              pending_names+=("$migration_name")
-            fi
-          done
-          actual_pending="$(IFS=,; printf '%s' "${pending_numbers[*]}")"
-          if [[ "$actual_pending" != "$EXPECTED_PENDING" ]]; then
-            {
-              echo "## Preflight aborted: unexpected pending migration set"
-              echo
-              echo "- Expected: \`$EXPECTED_PENDING\`"
-              echo "- Actual: \`$actual_pending\`"
-              echo
-              echo "No dump or migration was started."
-              echo
-              echo "### Ledger observed"
-              echo
-              echo ' ```text'
-              printf '%s\n' "$ledger_before"
-              echo ' ```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Pending migration mismatch. Expected '$EXPECTED_PENDING'; actual '$actual_pending'. No changes made."
-            exit 1
-          fi
-          echo "Pending migration check passed: $actual_pending."
 
           constraint_row="$(readonly_query "SELECT con.contype::text, pg_get_constraintdef(con.oid, true), con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
           if [[ -z "$constraint_row" ]]; then
@@ -436,7 +447,75 @@ jobs:
           done <<< "$migration_rows"
 
           constraint_row="$(readonly_query "SELECT con.contype::text, pg_get_constraintdef(con.oid, true), con.convalidated::text FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'benchmark_results' AND con.conname = 'benchmark_results_estrategia_check'")"
-          IFS=$'\t' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+          if [[ -z "$constraint_row" ]]; then
+            constraint_type="missing"
+            constraint_validated="false"
+            constraint_definition="missing"
+            post_errors+=("benchmark_results_estrategia_check is missing after migration")
+          else
+            IFS=
+                "$constraint_definition" != *"'baseline'::text"* ||
+                "$constraint_definition" != *"'baseline_risk'::text"* ||
+                "$constraint_definition" != *"'buyhold'::text"* ||
+                "$constraint_definition" != *"'jev'::text"* ]]; then
+            post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
+          fi
+
+          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
+          IFS=$'\t' read -r post_benchmark_rows post_backtest_rows post_wf_rows <<< "$counts"
+          if [[ "$post_benchmark_rows" != "$PRE_BENCHMARK_ROWS" ]]; then
+            post_errors+=("benchmark_results row count changed: before=$PRE_BENCHMARK_ROWS after=$post_benchmark_rows")
+          fi
+          if [[ "$post_backtest_rows" != "$PRE_BACKTEST_ROWS" ]]; then
+            post_errors+=("backtest_runs row count changed: before=$PRE_BACKTEST_ROWS after=$post_backtest_rows")
+          fi
+          if [[ "$post_wf_rows" != "$PRE_WF_ROWS" ]]; then
+            post_errors+=("walk_forward_folds row count changed: before=$PRE_WF_ROWS after=$post_wf_rows")
+          fi
+
+          identity_exists="$(readonly_query "SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL")"
+          IFS=$'\t' read -r allowed_emails_exists user_profiles_exists <<< "$identity_exists"
+          if [[ "$allowed_emails_exists" != "t" || "$user_profiles_exists" != "t" ]]; then
+            post_errors+=("Expected new identity tables are missing: allowed_emails=$allowed_emails_exists user_profiles=$user_profiles_exists")
+            allowed_emails_rows="not checked"
+            user_profiles_rows="not checked"
+          else
+            identity_counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.allowed_emails), (SELECT COUNT(*)::bigint FROM public.user_profiles)")"
+            IFS=$'\t' read -r allowed_emails_rows user_profiles_rows <<< "$identity_counts"
+            if [[ "$allowed_emails_rows" != "0" || "$user_profiles_rows" != "0" ]]; then
+              post_errors+=("New identity tables should be empty: allowed_emails=$allowed_emails_rows user_profiles=$user_profiles_rows")
+            fi
+          fi
+
+          {
+            echo "## Post-migration state"
+            echo
+            echo "- Migration runner result: PASS"
+            echo "- Migrations in ledger: \`$actual_migration_names\`"
+            echo "- Dump artifact size: \`$DUMP_BYTES bytes\`"
+            echo "- Dump SHA-256: \`$DUMP_SHA256\`"
+            echo "- Constraint after: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
+            echo "- Row counts after: \`benchmark_results=$post_benchmark_rows\`, \`backtest_runs=$post_backtest_rows\`, \`walk_forward_folds=$post_wf_rows\`"
+            echo "- New tables: \`allowed_emails=$allowed_emails_rows rows\`, \`user_profiles=$user_profiles_rows rows\`"
+            echo
+            echo "### Current ledger after migration (name | checksum | origin)"
+            echo
+            echo ' ```text'
+            printf '%s\n' "$ledger_after"
+            echo ' ```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( ${#post_errors[@]} > 0 )); then
+            echo "::error::Post-migration verification found ${#post_errors[@]} problem(s). No automatic correction was attempted."
+            for problem in "${post_errors[@]}"; do
+              echo "::error::$problem"
+            done
+            exit 1
+          fi
+
+          echo "Post-migration verification passed; canonical comparison remains a separate workflow."
+\t' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
+          fi
           if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" ||
                 "$constraint_definition" != *"'baseline'::text"* ||
                 "$constraint_definition" != *"'baseline_risk'::text"* ||
