@@ -91,6 +91,12 @@ try {
   page.on('console', (message) => {
     recordDiagnostic(`console ${message.type()}: ${message.text()}`);
   });
+  page.on('request', (request) => {
+    const requestUrl = new URL(request.url());
+    if (['/health', '/ready', '/v1/me'].includes(requestUrl.pathname)) {
+      recordDiagnostic(`request ${request.method()} ${requestUrl.href}`);
+    }
+  });
   page.on('requestfailed', (request) => {
     recordDiagnostic(
       `requestfailed ${request.method()} ${request.url()} :: ${
@@ -103,21 +109,18 @@ try {
   });
 
   await page.goto(`${WEB_BASE_URL}/login`, { waitUntil: 'networkidle' });
-  const browserApiProbe = await page.evaluate(
-    async (apiBaseUrl) => {
-      try {
-        const response = await fetch(new URL('/health', `${apiBaseUrl}/`), {
-          headers: { accept: 'application/json' },
-        });
-        return { status: response.status };
-      } catch (error) {
-        return {
-          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-        };
-      }
-    },
-    API_BASE_URL,
-  );
+  const browserApiProbe = await page.evaluate(async (apiBaseUrl) => {
+    try {
+      const response = await fetch(new URL('/health', `${apiBaseUrl}/`), {
+        headers: { accept: 'application/json' },
+      });
+      return { status: response.status };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      };
+    }
+  }, API_BASE_URL);
   recordDiagnostic(`Browser API connectivity probe: ${JSON.stringify(browserApiProbe)}`);
   assert.equal(
     browserApiProbe.status,
@@ -200,7 +203,7 @@ function recordDiagnostic(message) {
 }
 
 async function printDashboardDiagnostics(currentPage, error) {
-  const reason = error instanceof Error ? error.stack ?? error.message : String(error);
+  const reason = error instanceof Error ? (error.stack ?? error.message) : String(error);
   let cards = [];
   if (currentPage) {
     try {
