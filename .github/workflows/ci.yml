@@ -69,7 +69,13 @@ jobs:
       - name: Build then lint on a clean checkout
         run: pnpm build && pnpm lint
       - name: Format check
+        id: format_check
         run: pnpm format:check
+      - name: Show Prettier diff for Auth smoke script on failure
+        if: always() && steps.format_check.outcome == 'failure'
+        run: |
+          pnpm exec prettier apps/web/scripts/supabase-auth-smoke.mjs > "$RUNNER_TEMP/supabase-auth-smoke.formatted.mjs"
+          diff -u apps/web/scripts/supabase-auth-smoke.mjs "$RUNNER_TEMP/supabase-auth-smoke.formatted.mjs" || true
       - name: Check forward-only migrations
         run: pnpm check:migrations
 
