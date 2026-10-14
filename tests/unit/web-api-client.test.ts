@@ -73,7 +73,6 @@ describe('WebApiClient', () => {
     await expect(client.getHealth()).rejects.toThrow('fora do contrato esperado');
   });
 
-
   it('calls global fetch with its global receiver when no adapter is injected', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(function (
       this: unknown,
