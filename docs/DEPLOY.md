@@ -45,13 +45,15 @@ Add these *secrets* to the same environment:
 
 The configured web URL must exactly match `CORS_ORIGINS` on Render. Keep the Pages project URL on `pages.dev` for this phase; a final custom domain is out of scope.
 
-**Environment `staging-migrations`** — configure **required reviewers** in GitHub Settings. Add the secret:
+**Environment `staging-migrations`** — because this repository is public, GitHub's required-reviewer protection for environments is available on GitHub Free. In **Settings → Environments → staging-migrations**, add the repository owner as a required reviewer and require approval before the migration job can access its secret. With only one person who can approve, do not enable the option that prevents the workflow initiator from approving their own run; otherwise the migration job can become impossible to approve. This provides an explicit second confirmation, not independent two-person review.
+
+Add this secret:
 
 | Secret | Meaning |
 |---|---|
 | `STAGING_DATABASE_URL_MIGRATE` | PostgreSQL connection string for the staging database only |
 
-Merely declaring an environment in YAML does not enable an approval gate. The maintainer must configure required reviewers on `staging-migrations` in GitHub. Do not put the production connection string into this environment.
+Merely declaring an environment in YAML does not enable an approval gate. Verify the required-reviewer rule in GitHub Settings before using the workflow. Do not put the production connection string into this environment.
 
 ### 3. Reconcile the existing Render API staging service
 
