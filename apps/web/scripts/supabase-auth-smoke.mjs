@@ -98,7 +98,9 @@ try {
   });
   page.on('requestfailed', (request) => {
     recordDiagnostic(
-      `requestfailed ${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? 'unknown failure'}`,
+      `requestfailed ${request.method()} ${request.url()} :: ${
+        request.failure()?.errorText ?? 'unknown failure'
+      }`,
     );
   });
   page.on('pageerror', (error) => {
@@ -141,10 +143,24 @@ try {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await page.getByRole('heading', { name: 'Visão geral' }).waitFor({ state: 'visible' });
   await page.getByText('Online', { exact: true }).waitFor({ state: 'visible' });
+
+  const storedSessionsBeforeLogout = await persistedSupabaseSessionKeys(page);
+  assert.ok(
+    storedSessionsBeforeLogout.length > 0,
+    'Expected a persisted Supabase session in browser localStorage before logout',
+  );
+
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await page.getByRole('heading', { name: 'YEAR95', exact: true }).waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
-  console.log('PASS: logout returns to login');
+
+  const storedSessionsAfterLogout = await persistedSupabaseSessionKeys(page);
+  assert.deepEqual(
+    storedSessionsAfterLogout,
+    [],
+    'Logout must remove the persistent Supabase session from browser localStorage',
+  );
+  console.log('PASS: logout returns to login and clears browser-persisted Supabase session');
 } catch (error) {
   console.error('FAIL: local Supabase Auth smoke test');
   console.error(error);
@@ -169,7 +185,9 @@ async function printDashboardDiagnostics(currentPage, error) {
       cards = await currentPage.locator('.status-card').allInnerTexts();
     } catch (diagnosticError) {
       cards = [
-        `Could not read dashboard cards: ${diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)}`,
+        `Could not read dashboard cards: ${
+          diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)
+        }`,
       ];
     }
   }
@@ -181,6 +199,25 @@ async function printDashboardDiagnostics(currentPage, error) {
   ].join('\n');
   console.error(report);
   appendFileSync(DIAGNOSTICS_PATH, `\n${report}\n`, 'utf8');
+}
+
+async function persistedSupabaseSessionKeys(currentPage) {
+  return currentPage.evaluate(() => {
+    const hasAccessToken = (rawValue) => {
+      try {
+        const serialized = rawValue.startsWith('base64-') ? atob(rawValue.slice(7)) : rawValue;
+        return typeof JSON.parse(serialized)?.access_token === 'string';
+      } catch {
+        return false;
+      }
+    };
+
+    return Object.entries(window.localStorage)
+      .filter(
+        ([key, value]) => /^sb-.*-auth-token$/.test(key) && hasAccessToken(value),
+      )
+      .map(([key]) => key);
+  });
 }
 
 function requiredEnv(name) {
