@@ -20,7 +20,7 @@ assertLoopback(API_BASE_URL, 'API_BASE_URL');
 assertLoopback(WEB_BASE_URL, 'WEB_BASE_URL');
 assert.match(
   email,
-  /@example\\.test$/i,
+  /@example\.test$/i,
   'Auth smoke test must use a non-production .test address',
 );
 
