@@ -60,7 +60,9 @@ async function main() {
     );
 
     console.log('PASS: public staging GET /ready reports ready=true');
-    console.log('PASS: public staging browser login reaches dashboard with live API and identity cards');
+    console.log(
+      'PASS: public staging browser login reaches dashboard with live API and identity cards',
+    );
   } finally {
     await browser.close();
   }
@@ -113,6 +115,8 @@ function requiredHttpsOrigin(name) {
 }
 
 main().catch((error) => {
-  console.error(`STAGING SMOKE FAILED: ${error instanceof Error ? error.message : 'unknown error'}`);
+  console.error(
+    `STAGING SMOKE FAILED: ${error instanceof Error ? error.message : 'unknown error'}`,
+  );
   process.exitCode = 1;
 });
