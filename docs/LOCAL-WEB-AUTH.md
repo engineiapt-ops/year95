@@ -17,6 +17,8 @@ Prerequisites: Docker and the Supabase CLI.
 
 The app does not implement public registration. User creation, allowlisting, database bootstrap, and all keys in this guide are for the local development stack only.
 
+For local Auth, keep `[auth].enable_signup = false` to block global signups while keeping `[auth.email].enable_signup = true` so the email provider remains available for existing users to sign in. Setting the email provider flag to `false` causes GoTrue to reject email/password authentication with `email_provider_disabled`; the workflow checks this configuration pairing explicitly.
+
 ## Automated validation
 
 - `pnpm --filter @year95/web typecheck`
