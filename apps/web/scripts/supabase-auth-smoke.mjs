@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 
@@ -8,9 +9,12 @@ const SUPABASE_SERVICE_ROLE_KEY = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
 const API_BASE_URL = requiredEnv('API_BASE_URL');
 const WEB_BASE_URL = requiredEnv('WEB_BASE_URL');
 const PLAYWRIGHT_MODULE = requiredEnv('PLAYWRIGHT_MODULE');
+const DIAGNOSTICS_PATH =
+  process.env.PLAYWRIGHT_DIAGNOSTICS_PATH ?? '/tmp/year95-playwright.log';
 const email = process.env.AUTH_SMOKE_EMAIL ?? 'year95-auth-smoke@example.test';
 const password = process.env.AUTH_SMOKE_PASSWORD ?? 'Year95-local-smoke-2026!';
 
+writeFileSync(DIAGNOSTICS_PATH, 'YEAR95 Playwright smoke diagnostics\n', 'utf8');
 assertLoopback(SUPABASE_URL, 'SUPABASE_URL');
 assertLoopback(API_BASE_URL, 'API_BASE_URL');
 assertLoopback(WEB_BASE_URL, 'WEB_BASE_URL');
@@ -27,6 +31,7 @@ const authClient = createClient(SUPABASE_URL, anonKey, {
 });
 
 let browser;
+let page;
 try {
   // This privileged call targets the freshly started local Supabase stack only.
   const createUserResponse = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
@@ -82,8 +87,19 @@ try {
 
   const playwright = await import(pathToFileURL(PLAYWRIGHT_MODULE).href);
   browser = await playwright.chromium.launch({ headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage();
+  page = await browser.newPage();
   page.setDefaultTimeout(20_000);
+  page.on('console', (message) => {
+    recordDiagnostic(`console ${message.type()}: ${message.text()}`);
+  });
+  page.on('requestfailed', (request) => {
+    recordDiagnostic(
+      `requestfailed ${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? 'unknown failure'}`,
+    );
+  });
+  page.on('pageerror', (error) => {
+    recordDiagnostic(`pageerror: ${error.stack ?? error.message}`);
+  });
 
   await page.goto(`${WEB_BASE_URL}/login`, { waitUntil: 'networkidle' });
   await page.getByLabel('E-mail').fill(email);
@@ -125,9 +141,42 @@ try {
   await page.getByRole('heading', { name: 'YEAR95', exact: true }).waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
   console.log('PASS: logout returns to login');
+} catch (error) {
+  console.error('FAIL: local Supabase Auth smoke test');
+  console.error(error);
+  await printDashboardDiagnostics(page, error);
+  throw error;
 } finally {
   if (browser) await browser.close();
   await authClient.auth.signOut().catch(() => undefined);
+}
+
+function recordDiagnostic(message) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  appendFileSync(DIAGNOSTICS_PATH, `${line}\n`, 'utf8');
+  console.log(`PLAYWRIGHT: ${message}`);
+}
+
+async function printDashboardDiagnostics(currentPage, error) {
+  const reason = error instanceof Error ? error.stack ?? error.message : String(error);
+  let cards = [];
+  if (currentPage) {
+    try {
+      cards = await currentPage.locator('.status-card').allInnerTexts();
+    } catch (diagnosticError) {
+      cards = [
+        `Could not read dashboard cards: ${diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)}`,
+      ];
+    }
+  }
+  const report = [
+    'DASHBOARD FAILURE DIAGNOSTICS',
+    `Reason: ${reason}`,
+    `URL: ${currentPage?.url() ?? 'browser page was not created'}`,
+    `Cards: ${JSON.stringify(cards, null, 2)}`,
+  ].join('\n');
+  console.error(report);
+  appendFileSync(DIAGNOSTICS_PATH, `\n${report}\n`, 'utf8');
 }
 
 function requiredEnv(name) {
