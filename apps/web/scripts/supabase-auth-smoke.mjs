@@ -218,9 +218,7 @@ async function persistedSupabaseSessionKeys(currentPage) {
     };
 
     return Object.entries(window.localStorage)
-      .filter(
-        ([key, value]) => /^sb-.*-auth-token$/.test(key) && hasAccessToken(value),
-      )
+      .filter(([key, value]) => /^sb-.*-auth-token$/.test(key) && hasAccessToken(value))
       .map(([key]) => key);
   });
 }
