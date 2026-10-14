@@ -2,7 +2,7 @@
 
 ## Scope and safety
 
-The first staging deploy uses a Docker web service on Render for the YEAR95 API and Cloudflare Pages for `apps/web`. The Render service has automatic deploys disabled. The `.github/workflows/deploy.yml` workflow is triggered only after the `CI` workflow completes successfully for a push to `main`; it checks that the tested SHA is still the current `main` SHA, deploys that exact commit to Render, waits for deployment state `live` and API readiness, deploys the web bundle, and runs a public browser-login smoke test.
+The first staging deploy uses a Docker web service on Render for the YEAR95 API and Cloudflare Pages for `apps/web`. The Render service has automatic deploys disabled. The `.github/workflows/deploy.yml` workflow is triggered only after the `CI` workflow completes successfully for a push to `main`; it checks that the tested SHA is still the current `main` SHA **and** that GitHub associates that exact commit with a closed, merged PR into `main`. Direct pushes to `main` are not deployed to staging, even when CI passes. The workflow deploys only the verified merge SHA, waits for deployment state `live` and API readiness, deploys the web bundle, and runs a public browser-login smoke test.
 
 Database migrations are deliberately separate. They are only applied by manual dispatch of `.github/workflows/staging-migrations.yml` from `main`, after the GitHub Environment `staging-migrations` has been configured to require approval from a maintainer. A Render service startup and a normal deploy never apply migrations.
 
@@ -92,20 +92,33 @@ Never provide `DATABASE_URL`, a service-role key, Render credentials, or any pri
 
 ## Manually applying staging migrations
 
-1. Confirm that the workflow has been merged to `main` and that `staging-migrations` has required reviewers configured.
-2. Open **Actions → Staging database migrations → Run workflow**, select `main`, and enter the exact expected pending migration numbers (for a brand-new database, the current full set is `024,025,026,027,028,029`). Enter `none` only if the staging database is already current.
-3. A maintainer must approve the protected environment before the job can access `STAGING_DATABASE_URL_MIGRATE`.
-4. The workflow validates the forward-only migration files, checks the expected pending set read-only, runs the official repository migration runner once, and verifies the migration ledger afterward. A mismatch fails closed before the runner starts. On failure, inspect the staging ledger before retrying.
+1. Confirm that the workflow has been merged to `main`. Copy the exact 40-character HEAD SHA shown for `main` in GitHub after reviewing that commit.
+2. Open **Actions → Staging database migrations → Run workflow**, select `main`, paste the SHA into `confirmed_sha`, and enter the exact expected pending migration numbers (for a brand-new database, the current full set is `024,025,026,027,028,029`). Enter `none` only if the staging database is already current.
+3. The workflow fails before reading database credentials unless the submitted SHA matches both the dispatch checkout SHA and the current live HEAD of `main`. If `main` moved, review the new commit and start a new run.
+4. A maintainer must approve the `staging-migrations` environment before the job can access `STAGING_DATABASE_URL_MIGRATE`. In a public repository, configure required reviewers where the GitHub plan/settings allow it; the SHA confirmation is an additional guard, not a substitute for environment approval.
+5. The workflow validates forward-only migration files, checks the expected pending set read-only, runs the official repository migration runner once, and verifies the migration ledger afterward. A mismatch fails closed before the runner starts. On failure, inspect the staging ledger before retrying.
 
 Do not run migrations from the deploy workflow or as part of the API container startup. The production migration workflow remains separate and unchanged.
 
 ## Automated deployment and post-deploy smoke
 
-After a push to `main`, the existing `CI` workflow must conclude with `success`. Only then can `Deploy staging` run. It also verifies that the successful CI SHA is still the current `main` SHA; stale workflow runs are skipped rather than deploying older code.
+After a push to `main`, the existing `CI` workflow must conclude with `success`. Only then can `Deploy staging` run. It verifies the SHA is still current and queries GitHub for a closed, merged PR whose base is `main` and whose `merge_commit_sha` exactly equals the CI SHA. A direct push fails this check even if CI passes; stale workflow runs are skipped rather than deploying older code.
 
 For the validated SHA, the workflow builds and secret-scans the web bundle, triggers the Render API deploy through the Render API, waits for Render's deploy status to become `live`, and requires `GET /ready` to return HTTP 200 with `ready: true`. It then deploys the web bundle to Cloudflare Pages and runs `scripts/staging-smoke.mjs` in Chromium.
 
 The post-deploy smoke requires the public web URL to reach the login form, a successful login using the dedicated staging test account, the dashboard health/readiness cards, and an authenticated `/v1/me` response with HTTP 200. It never prints the test password or access token.
+
+## Direct-push exceptions register
+
+The repository is public and the repository owner has confirmed that they are currently the only person with write access. That reduces the number of actors but does not prevent an accidental direct push or enforce review on `main`. A CODEOWNERS file alone does not block a merge or push.
+
+The free-plan deploy guard enforces a narrower guarantee: **a CI-green direct push still cannot deploy to staging**, because the exact commit must be the merge SHA of a closed, merged PR whose base is `main`. It does not stop a direct push from changing `main`, and it does not replace repository-level branch rules.
+
+If a direct push to `main` occurs, do not bypass the deploy guard or manually deploy that SHA. Record it here with the date, full SHA, reason, and follow-up action; then restore the normal reviewed-PR path. The guard's failed workflow run and step summary also provide an audit trail.
+
+| Date (UTC) | Direct-push SHA | Reason and follow-up |
+|---|---|---|
+| — | No exceptions recorded | — |
 
 ## Costs and limits
 
