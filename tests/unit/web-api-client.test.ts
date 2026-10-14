@@ -72,4 +72,34 @@ describe('WebApiClient', () => {
     });
     await expect(client.getHealth()).rejects.toThrow('fora do contrato esperado');
   });
+
+  it('rejects malformed API base URLs before invoking fetch', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ status: 'ok', service: 'year95-api', version: '0.1.0' }),
+    );
+    const client = new WebApiClient({
+      baseUrl: '127.0.0.1:3000',
+      getAccessToken: () => null,
+      onUnauthorized: vi.fn(),
+      fetchImpl,
+    });
+
+    await expect(client.getHealth()).rejects.toThrow(/URL da API inválido|Configuração inválida/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('preserves the original fetch failure detail in development', async () => {
+    const client = new WebApiClient({
+      baseUrl: 'http://localhost:3000',
+      getAccessToken: () => null,
+      onUnauthorized: vi.fn(),
+      fetchImpl: async () => {
+        throw new Error('test network failure');
+      },
+    });
+
+    await expect(client.getHealth()).rejects.toThrow(
+      /Falha no fetch para http:\/\/localhost:3000\/health: test network failure|Não foi possível conectar à API YEAR95/,
+    );
+  });
 });
