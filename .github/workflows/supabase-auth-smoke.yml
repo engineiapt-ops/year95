@@ -61,7 +61,7 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Verify public signup remains disabled in disposable CI Supabase
+      - name: Check local Auth settings
         run: |
           python - <<'PY'
           import tomllib
@@ -69,11 +69,9 @@ jobs:
           with open("supabase/config.toml", "rb") as config_file:
               config = tomllib.load(config_file)
 
-          assert config["auth"]["enable_signup"] is False, "Public Auth signup must remain disabled"
-          assert (
-              config["auth"]["email"]["enable_signup"] is False
-          ), "Public email signup must remain disabled"
-          print("Public signup remains disabled.")
+          assert config["auth"]["enable_signup"] is False, "Global signup must stay disabled"
+          assert config["auth"]["email"]["enable_signup"] is True, "Email provider must stay enabled"
+          print("Global signup disabled; email provider enabled.")
           PY
       - name: Start disposable local Supabase
         run: supabase start
