@@ -47,7 +47,10 @@ export class WebApiClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.getAccessToken = options.getAccessToken;
     this.onUnauthorized = options.onUnauthorized;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+    if (import.meta.env.DEV) {
+      console.debug(`[YEAR95] Resolved API base URL: ${JSON.stringify(this.baseUrl)}`);
+    }
   }
 
   getHealth(): Promise<HealthResponse> {
@@ -73,14 +76,31 @@ export class WebApiClient {
     const headers = new Headers({ accept: 'application/json' });
     if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
 
+    let url: URL;
+    try {
+      url = new URL(path, `${this.baseUrl}/`);
+    } catch (error) {
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      throw new ApiClientError(
+        import.meta.env.DEV
+          ? `URL da API inválido: baseUrl=${JSON.stringify(this.baseUrl)} path=${path} (${detail})`
+          : 'Configuração inválida para conexão com a API YEAR95.',
+      );
+    }
+
     let response: Response;
     try {
-      response = await this.fetchImpl(new URL(path, `${this.baseUrl}/`), {
+      response = await this.fetchImpl(url, {
         method: 'GET',
         headers,
       });
-    } catch {
-      throw new ApiClientError('Não foi possível conectar à API YEAR95.');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new ApiClientError(
+        import.meta.env.DEV
+          ? `Falha no fetch para ${url.href}: ${detail}`
+          : 'Não foi possível conectar à API YEAR95.',
+      );
     }
 
     let payload: unknown;

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -37,6 +38,7 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
   const [loading, setLoading] = useState(client !== null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const expirationInProgress = useRef(false);
 
   useEffect(() => {
     if (!client) {
@@ -49,13 +51,17 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, nextSession) => {
-      if (active) {
-        setSession(nextSession);
+      if (!active) return;
+      if (expirationInProgress.current && nextSession) {
         setLoading(false);
-        if (nextSession) {
-          setSessionExpired(false);
-          setAuthError(null);
-        }
+        return;
+      }
+
+      setSession(nextSession);
+      setLoading(false);
+      if (nextSession) {
+        setSessionExpired(false);
+        setAuthError(null);
       }
     });
 
@@ -63,6 +69,10 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
       .getSession()
       .then(({ data, error }) => {
         if (!active) return;
+        if (expirationInProgress.current && data.session) {
+          setSession(null);
+          return;
+        }
         if (error) {
           setAuthError(error.message);
           setSession(null);
@@ -88,6 +98,7 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<void> => {
+      expirationInProgress.current = false;
       setAuthError(null);
       setSessionExpired(false);
       if (!client) {
@@ -102,7 +113,9 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
   );
 
   const signOut = useCallback(async (): Promise<void> => {
+    expirationInProgress.current = false;
     setSession(null);
+    setSessionExpired(false);
     if (!client) return;
     const { error } = await client.auth.signOut();
     if (error) {
@@ -113,6 +126,8 @@ export function AuthProvider({ children, client = browserSupabaseClient }: AuthP
   }, [client]);
 
   const expireSession = useCallback(async (): Promise<void> => {
+    if (expirationInProgress.current) return;
+    expirationInProgress.current = true;
     setSession(null);
     setSessionExpired(true);
     setAuthError(null);

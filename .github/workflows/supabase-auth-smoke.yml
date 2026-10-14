@@ -1,0 +1,208 @@
+name: Local Supabase Auth Smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/supabase-auth-smoke.yml'
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'packages/config/**'
+      - 'packages/persistence/**'
+      - 'db/baseline/**'
+      - 'db/migrations/**'
+      - 'supabase/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/supabase-auth-smoke.yml'
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'packages/config/**'
+      - 'packages/persistence/**'
+      - 'db/baseline/**'
+      - 'db/migrations/**'
+      - 'supabase/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+
+concurrency:
+  group: local-supabase-auth-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22
+  PNPM_VERSION: 9.15.9
+
+jobs:
+  real-local-auth:
+    name: real-local-auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Check local Auth settings
+        run: |
+          python - <<'PY'
+          import tomllib
+
+          with open("supabase/config.toml", "rb") as config_file:
+              config = tomllib.load(config_file)
+
+          auth = config["auth"]
+          assert auth["enable_signup"] is False, "Global signup must stay disabled"
+          assert auth["email"]["enable_signup"] is True, "Email signup must remain enabled"
+
+          # Supabase CLI versions may not expose this provider flag in config.toml.
+          # If the external email provider is configured here, it must not be disabled.
+          for external_config in (auth.get("external"), config.get("external")):
+              if not isinstance(external_config, dict):
+                  continue
+              email_provider = external_config.get("email")
+              if isinstance(email_provider, dict) and "enabled" in email_provider:
+                  assert email_provider["enabled"] is True, "External email authentication must stay enabled"
+
+          print("Global signup disabled; email signup enabled; optional external provider flag validated.")
+          PY
+      - name: Start disposable local Supabase
+        run: supabase start
+
+      - name: Export only local connection values for subsequent steps
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          : "${API_URL:?Supabase API URL missing}"
+          : "${DB_URL:?Supabase database URL missing}"
+          : "${ANON_KEY:?Supabase anon key missing}"
+          : "${SERVICE_ROLE_KEY:?Supabase local service-role key missing}"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          echo "::add-mask::$ANON_KEY"
+          {
+            printf 'SUPABASE_URL=%s\n' "$API_URL"
+            printf 'DATABASE_URL=%s\n' "$DB_URL"
+            printf 'SUPABASE_ANON_KEY=%s\n' "$ANON_KEY"
+            printf 'API_BASE_URL=http://127.0.0.1:3000\n'
+            printf 'WEB_BASE_URL=http://localhost:5173\n'
+          } >> "$GITHUB_ENV"
+
+      - name: Verify canonical database baseline on disposable local PostgreSQL
+        env:
+          DB_BASELINE_DISPOSABLE: '1'
+        run: pnpm db:baseline
+
+      - name: Apply forward-only migrations to disposable local PostgreSQL
+        run: pnpm --filter @year95/persistence migrate
+
+      - name: Allowlist the local test account
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO public.allowed_emails(email) VALUES ('year95-auth-smoke@example.test') ON CONFLICT (email) DO NOTHING;"
+
+      - name: Build API
+        run: pnpm --filter @year95/api build
+
+      - name: Build web with public local Supabase settings
+        run: |
+          VITE_API_BASE_URL="$API_BASE_URL" \
+          VITE_SUPABASE_URL="$SUPABASE_URL" \
+          VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+          pnpm --filter @year95/web build
+
+      - name: Install pinned Playwright and Chromium outside the application bundle
+        run: |
+          npm install --prefix "$RUNNER_TEMP/playwright" --no-audit --no-fund playwright@1.55.0
+          "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Start API using local database and local Supabase JWKS
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_ENV=test \
+          PORT=3000 \
+          DATABASE_URL="$DATABASE_URL" \
+          SUPABASE_URL="$SUPABASE_URL" \
+          SUPABASE_JWKS_URL="$SUPABASE_URL/auth/v1/.well-known/jwks.json" \
+          SUPABASE_JWT_AUDIENCE=authenticated \
+          CORS_ORIGINS=http://localhost:5173 \
+          pnpm --filter @year95/api start > "$RUNNER_TEMP/year95-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/year95-api.pid"
+          for attempt in $(seq 1 60); do
+            if curl --silent --show-error --fail "$API_BASE_URL/ready" >/dev/null; then
+              echo "API readiness confirmed against disposable PostgreSQL."
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/year95-api.log"
+          echo "API failed to become ready." >&2
+          exit 1
+
+      - name: Start web app with public anon key only
+        shell: bash
+        run: |
+          set -euo pipefail
+          VITE_API_BASE_URL="$API_BASE_URL" \
+          VITE_SUPABASE_URL="$SUPABASE_URL" \
+          VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+          pnpm --filter @year95/web dev > "$RUNNER_TEMP/year95-web.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/year95-web.pid"
+          for attempt in $(seq 1 45); do
+            if curl --silent --show-error --fail "$WEB_BASE_URL/login" >/dev/null; then
+              echo "Web login page is serving."
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/year95-web.log"
+          echo "Web app failed to become ready." >&2
+          exit 1
+
+      - name: Run real Supabase login, dashboard, JWT, logout and session-expiry smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(supabase status -o env)"
+          export SUPABASE_URL="$API_URL"
+          export SUPABASE_ANON_KEY="$ANON_KEY"
+          export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export API_BASE_URL WEB_BASE_URL
+          export PLAYWRIGHT_MODULE="$RUNNER_TEMP/playwright/node_modules/playwright/index.mjs"
+          export PLAYWRIGHT_DIAGNOSTICS_PATH="$RUNNER_TEMP/year95-playwright.log"
+          node apps/web/scripts/supabase-auth-smoke.mjs
+
+      - name: Upload API, web and Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: year95-local-auth-smoke-diagnostics
+          path: |
+            ${{ runner.temp }}/year95-api.log
+            ${{ runner.temp }}/year95-web.log
+            ${{ runner.temp }}/year95-playwright.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop disposable local Supabase
+        if: always()
+        run: supabase stop --no-backup || true

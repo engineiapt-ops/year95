@@ -27,12 +27,23 @@ export default tseslint.config(
       globals: {
         Buffer: 'readonly',
         console: 'readonly',
+        fetch: 'readonly',
         process: 'readonly',
+        URL: 'readonly',
       },
     },
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['apps/web/scripts/supabase-auth-smoke.mjs'],
+    languageOptions: {
+      globals: {
+        atob: 'readonly',
+        window: 'readonly',
+      },
+    },
+  },
   {
     rules: {
       'no-restricted-syntax': ['error', ...forbiddenIdentifiers],

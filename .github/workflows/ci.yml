@@ -69,7 +69,24 @@ jobs:
       - name: Build then lint on a clean checkout
         run: pnpm build && pnpm lint
       - name: Format check
+        id: format_check
         run: pnpm format:check
+      - name: Show Prettier diffs for all files that fail format check
+        if: always() && steps.format_check.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$RUNNER_TEMP/prettier-unformatted-files.txt"
+          pnpm exec prettier . --list-different > "$files" || true
+          if [[ ! -s "$files" ]]; then
+            echo "Prettier did not list any files; inspect the Format check output above."
+            exit 0
+          fi
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+            printf '\n--- Prettier diff: %s ---\n' "$file"
+            pnpm exec prettier "$file" | diff -u --label "$file (working tree)" --label "$file (Prettier)" "$file" - || true
+          done < "$files"
       - name: Check forward-only migrations
         run: pnpm check:migrations
 
