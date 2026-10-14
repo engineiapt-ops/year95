@@ -75,9 +75,18 @@ describe('WebApiClient', () => {
 
 
   it('calls global fetch with its global receiver when no adapter is injected', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(jsonResponse({ status: 'ok', service: 'year95-api', version: '0.1.0' }));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(function (
+      this: unknown,
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) {
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError('Illegal invocation');
+      }
+      return Promise.resolve(
+        jsonResponse({ status: 'ok', service: 'year95-api', version: '0.1.0' }),
+      );
+    });
     try {
       const client = new WebApiClient({
         baseUrl: 'http://localhost:3000',
