@@ -81,7 +81,7 @@ jobs:
             printf 'SUPABASE_URL=%s\n' "$API_URL"
             printf 'DATABASE_URL=%s\n' "$DB_URL"
             printf 'SUPABASE_ANON_KEY=%s\n' "$ANON_KEY"
-            printf 'API_BASE_URL=http://127.0.0.1:3000\n'
+            printf 'API_BASE_URL=http://localhost:3000\n'
             printf 'WEB_BASE_URL=http://localhost:5173\n'
           } >> "$GITHUB_ENV"
 
@@ -167,7 +167,20 @@ jobs:
           export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
           export API_BASE_URL WEB_BASE_URL
           export PLAYWRIGHT_MODULE="$RUNNER_TEMP/playwright/node_modules/playwright/index.mjs"
+          export PLAYWRIGHT_DIAGNOSTICS_PATH="$RUNNER_TEMP/year95-playwright.log"
           node apps/web/scripts/supabase-auth-smoke.mjs
+
+      - name: Upload API, web and Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: year95-local-auth-smoke-diagnostics
+          path: |
+            ${{ runner.temp }}/year95-api.log
+            ${{ runner.temp }}/year95-web.log
+            ${{ runner.temp }}/year95-playwright.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Stop disposable local Supabase
         if: always()
