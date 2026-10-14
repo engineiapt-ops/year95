@@ -17,11 +17,7 @@ writeFileSync(DIAGNOSTICS_PATH, 'YEAR95 Playwright smoke diagnostics\n', 'utf8')
 assertLoopback(SUPABASE_URL, 'SUPABASE_URL');
 assertLoopback(API_BASE_URL, 'API_BASE_URL');
 assertLoopback(WEB_BASE_URL, 'WEB_BASE_URL');
-assert.match(
-  email,
-  /@example\.test$/i,
-  'Auth smoke test must use a non-production .test address',
-);
+assert.match(email, /@example\.test$/i, 'Auth smoke test must use a non-production .test address');
 
 const serviceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = SUPABASE_ANON_KEY;
@@ -107,6 +103,28 @@ try {
   });
 
   await page.goto(`${WEB_BASE_URL}/login`, { waitUntil: 'networkidle' });
+  const browserApiProbe = await page.evaluate(
+    async (apiBaseUrl) => {
+      try {
+        const response = await fetch(new URL('/health', `${apiBaseUrl}/`), {
+          headers: { accept: 'application/json' },
+        });
+        return { status: response.status };
+      } catch (error) {
+        return {
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        };
+      }
+    },
+    API_BASE_URL,
+  );
+  recordDiagnostic(`Browser API connectivity probe: ${JSON.stringify(browserApiProbe)}`);
+  assert.equal(
+    browserApiProbe.status,
+    200,
+    `Browser API probe must return HTTP 200: ${JSON.stringify(browserApiProbe)}`,
+  );
+
   await page.getByLabel('E-mail').fill(email);
   await page.getByLabel('Senha').fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
