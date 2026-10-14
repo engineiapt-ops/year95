@@ -13,6 +13,7 @@ export async function startApi(env: ConfigEnv): Promise<void> {
     ? createPgPool({
         connectionString: config.DATABASE_URL.reveal(),
         nodeEnv: config.NODE_ENV,
+        sslMode: config.NODE_ENV === 'test' ? 'disable' : 'verify-full',
         ...(config.DATABASE_CA_CERT_PEM ? { caCertPem: config.DATABASE_CA_CERT_PEM } : {}),
       })
     : undefined;
