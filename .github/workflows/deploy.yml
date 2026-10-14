@@ -1,0 +1,246 @@
+name: Deploy staging
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: year95-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
+    name: Deploy the CI-validated main commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: staging
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      NODE_VERSION: 22
+      PNPM_VERSION: 9.15.9
+      STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+      STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+      STAGING_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+      STAGING_AUTH_TEST_EMAIL: ${{ vars.STAGING_AUTH_TEST_EMAIL }}
+      STAGING_AUTH_TEST_PASSWORD: ${{ secrets.STAGING_AUTH_TEST_PASSWORD }}
+      CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+
+    steps:
+      - name: Checkout the exact commit that passed CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: true
+
+      - name: Skip stale successful CI runs
+        id: freshness
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ -z "$current_main" ]]; then
+            echo "::error::Could not resolve main; refusing to deploy."
+            exit 1
+          fi
+          if [[ "$current_main" != "$DEPLOY_SHA" ]]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipped stale CI SHA $DEPLOY_SHA; current main is $current_main."
+            exit 0
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+          echo "CI passed for the current main SHA."
+
+      - name: Validate staging configuration before changing infrastructure
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(STAGING_API_URL STAGING_WEB_URL STAGING_SUPABASE_URL STAGING_SUPABASE_ANON_KEY STAGING_AUTH_TEST_EMAIL STAGING_AUTH_TEST_PASSWORD CLOUDFLARE_PAGES_PROJECT_NAME CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN RENDER_SERVICE_ID RENDER_API_KEY)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required staging environment variable or secret is missing: $name"
+              exit 1
+            fi
+          done
+          if [[ ! "$CLOUDFLARE_PAGES_PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            echo "::error::CLOUDFLARE_PAGES_PROJECT_NAME must contain lowercase letters, numbers and hyphens only."
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          const vars = ['STAGING_API_URL', 'STAGING_WEB_URL', 'STAGING_SUPABASE_URL'];
+          const parsed = {};
+          for (const name of vars) {
+            const value = process.env[name];
+            let url;
+            try {
+              url = new URL(value);
+            } catch {
+              throw new Error(name + ' must be a valid HTTPS origin; its value is withheld.');
+            }
+            if (
+              url.protocol !== 'https:' ||
+              url.username ||
+              url.password ||
+              url.pathname !== '/' ||
+              url.search ||
+              url.hash
+            ) {
+              throw new Error(name + ' must be an HTTPS origin without credentials, path, query or fragment.');
+            }
+            parsed[name] = url.origin;
+          }
+          const expectedWeb = 'https://' + process.env.CLOUDFLARE_PAGES_PROJECT_NAME + '.pages.dev';
+          if (parsed.STAGING_WEB_URL !== expectedWeb) {
+            throw new Error('STAGING_WEB_URL must match the project .pages.dev origin so CORS remains exact.');
+          }
+          console.log('Staging HTTPS origins validated; values withheld.');
+          NODE
+          echo "::add-mask::$STAGING_AUTH_TEST_PASSWORD"
+          echo "::add-mask::$RENDER_API_KEY"
+          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+
+      - name: Set up pnpm and Node.js
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install workspace dependencies
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate migrations before deploy
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        run: pnpm check:migrations
+
+      - name: Build web with staging-only public configuration
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        env:
+          VITE_API_BASE_URL: ${{ vars.STAGING_API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+        run: pnpm --filter @year95/web build
+
+      - name: Install pinned Playwright and Chromium for post-deploy smoke
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/playwright" --no-audit --no-fund playwright@1.55.0
+          "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Trigger Render deploy for the exact CI-validated commit
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        id: render-deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/render-deploy-response.json"
+          http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+            --request POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            --header "Authorization: Bearer $RENDER_API_KEY" \
+            --header 'Accept: application/json' \
+            --header 'Content-Type: application/json' \
+            --data "{\"commitId\":\"$DEPLOY_SHA\",\"clearCache\":\"do_not_clear\"}")" || {
+              echo "::error::Render deploy request failed; response body withheld."
+              exit 1
+            }
+          if [[ "$http_code" != "201" ]]; then
+            echo "::error::Render did not accept the deploy request (HTTP $http_code); response body withheld."
+            exit 1
+          fi
+          deploy_id="$(jq -r '.id // empty' "$response")"
+          if [[ -z "$deploy_id" ]]; then
+            echo "::error::Render accepted a response without a deployment ID."
+            exit 1
+          fi
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+          echo "Render accepted deployment for the validated commit."
+
+      - name: Wait for Render deployment to become live
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        shell: bash
+        env:
+          RENDER_DEPLOY_ID: ${{ steps.render-deploy.outputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            response="$RUNNER_TEMP/render-deploy-status.json"
+            http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+              --request GET "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys/$RENDER_DEPLOY_ID" \
+              --header "Authorization: Bearer $RENDER_API_KEY" \
+              --header 'Accept: application/json')" || http_code="000"
+            if [[ "$http_code" == "200" ]]; then
+              status="$(jq -r '.status // "unknown"' "$response")"
+              if [[ "$status" == "live" ]]; then
+                echo "Render deployment reached live status."
+                exit 0
+              fi
+              case "$status" in
+                build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                  echo "::error::Render deployment ended in terminal state '$status'. Response details withheld."
+                  exit 1
+                  ;;
+              esac
+            fi
+            sleep 20
+          done
+          echo "::error::Timed out waiting for the Render deployment to become live."
+          exit 1
+
+      - name: Wait for API readiness
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            body="$RUNNER_TEMP/staging-ready.json"
+            status="$(curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+              --max-time 15 "${STAGING_API_URL%/}/ready" 2>/dev/null || true)"
+            if [[ "$status" == "200" ]] && jq -e '.ready == true' "$body" >/dev/null 2>&1; then
+              echo "Staging API /ready reports ready=true."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Staging API did not become ready within the allotted time."
+          exit 1
+
+      - name: Deploy web bundle to Cloudflare Pages
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }} --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run public staging readiness and browser login smoke test
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        env:
+          STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+          STAGING_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_AUTH_TEST_EMAIL: ${{ vars.STAGING_AUTH_TEST_EMAIL }}
+          STAGING_AUTH_TEST_PASSWORD: ${{ secrets.STAGING_AUTH_TEST_PASSWORD }}
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/playwright/node_modules/playwright/index.mjs
+        run: node scripts/staging-smoke.mjs
