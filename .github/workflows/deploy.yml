@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   deployments: write
+  pull-requests: read
 
 concurrency:
   group: year95-staging-deploy
@@ -59,6 +60,46 @@ jobs:
           fi
           echo "deploy=true" >> "$GITHUB_OUTPUT"
           echo "CI passed for the current main SHA."
+
+      - name: Require the CI-validated SHA to be a merged PR into main
+        if: ${{ steps.freshness.outputs.deploy == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/associated-pull-requests.json"
+          http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+            --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/pulls" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28')" || {
+              echo "::error::Could not verify merged PR association for the CI-validated commit; staging deploy is blocked."
+              exit 1
+            }
+          if [[ "$http_code" != "200" ]]; then
+            echo "::error::GitHub PR-association verification returned HTTP $http_code; staging deploy is blocked."
+            exit 1
+          fi
+          if ! jq -e --arg sha "$DEPLOY_SHA" 'any(.[]; .base.ref == "main" and .state == "closed" and .merged_at != null and .merge_commit_sha == $sha)' "$response" >/dev/null; then
+            {
+              echo "## Staging deploy blocked"
+              echo
+              echo "- CI passed for SHA: `$DEPLOY_SHA`"
+              echo "- Reason: no merged pull request into `main` is associated with this exact merge SHA."
+              echo "- Direct pushes to `main` are not deployed to staging."
+              echo "- Recovery: record the exception in `docs/DEPLOY.md` and reintroduce the change through a reviewed, merged PR."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::No merged PR into main was found for the exact SHA $DEPLOY_SHA. Direct pushes cannot deploy to staging."
+            exit 1
+          fi
+          echo "Confirmed: CI-validated SHA is the merge commit of a closed, merged PR into main."
+          {
+            echo "## Merged PR provenance"
+            echo
+            echo "- CI-validated merge SHA: `$DEPLOY_SHA`"
+            echo "- Associated merged PR into `main`: verified."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate staging configuration before changing infrastructure
         if: ${{ steps.freshness.outputs.deploy == 'true' }}
