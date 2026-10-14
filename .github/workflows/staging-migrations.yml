@@ -12,6 +12,11 @@ on:
         required: true
         default: none
         type: string
+      dry_run:
+        description: 'Read-only preflight only. Keep true for validation; set false only to apply migrations.'
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -177,7 +182,23 @@ jobs:
           fi
           echo "Read-only preflight passed. Expected pending set: $actual_csv."
 
+      - name: Report read-only dry-run result
+        if: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Staging migration dry-run passed"
+            echo
+            echo "- Confirmed SHA matches the workflow checkout and current `main`."
+            echo "- Staging PostgreSQL connection succeeded."
+            echo "- Expected pending migration set matched the read-only ledger check."
+            echo "- No migration SQL was applied."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Dry-run passed; no database changes were made."
+
       - name: Apply forward-only staging migrations
+        if: ${{ !inputs.dry_run }}
         shell: bash
         env:
           DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
@@ -190,6 +211,7 @@ jobs:
           echo "Staging migration runner completed."
 
       - name: Verify the full migration ledger after applying
+        if: ${{ !inputs.dry_run }}
         shell: bash
         env:
           DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
