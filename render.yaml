@@ -15,8 +15,6 @@ services:
         value: info
       - key: DATABASE_URL
         sync: false
-      - key: DATABASE_CA_CERT_PEM
-        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_JWKS_URL
