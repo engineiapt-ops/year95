@@ -73,6 +73,26 @@ describe('WebApiClient', () => {
     await expect(client.getHealth()).rejects.toThrow('fora do contrato esperado');
   });
 
+
+  it('calls global fetch with its global receiver when no adapter is injected', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ status: 'ok', service: 'year95-api', version: '0.1.0' }));
+    try {
+      const client = new WebApiClient({
+        baseUrl: 'http://localhost:3000',
+        getAccessToken: () => null,
+        onUnauthorized: vi.fn(),
+      });
+
+      await expect(client.getHealth()).resolves.toMatchObject({ status: 'ok' });
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(fetchSpy.mock.contexts[0]).toBe(globalThis);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('rejects malformed API base URLs before invoking fetch', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({ status: 'ok', service: 'year95-api', version: '0.1.0' }),
