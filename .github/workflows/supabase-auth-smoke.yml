@@ -69,9 +69,20 @@ jobs:
           with open("supabase/config.toml", "rb") as config_file:
               config = tomllib.load(config_file)
 
-          assert config["auth"]["enable_signup"] is False, "Global signup must stay disabled"
-          assert config["auth"]["email"]["enable_signup"] is True, "Email provider must stay enabled"
-          print("Global signup disabled; email provider enabled.")
+          auth = config["auth"]
+          assert auth["enable_signup"] is False, "Global signup must stay disabled"
+          assert auth["email"]["enable_signup"] is True, "Email signup must remain enabled"
+
+          # Supabase CLI versions may not expose this provider flag in config.toml.
+          # If the external email provider is configured here, it must not be disabled.
+          for external_config in (auth.get("external"), config.get("external")):
+              if not isinstance(external_config, dict):
+                  continue
+              email_provider = external_config.get("email")
+              if isinstance(email_provider, dict) and "enabled" in email_provider:
+                  assert email_provider["enabled"] is True, "External email authentication must stay enabled"
+
+          print("Global signup disabled; email signup enabled; optional external provider flag validated.")
           PY
       - name: Start disposable local Supabase
         run: supabase start
