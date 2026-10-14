@@ -3,6 +3,10 @@ name: Staging database migrations
 on:
   workflow_dispatch:
     inputs:
+      confirmed_sha:
+        description: 'Full 40-character SHA of the current main commit you reviewed. The run fails if it no longer matches main.'
+        required: true
+        type: string
       expected_pending:
         description: 'Expected pending migration numbers, comma-separated (for example 024,025,026), or none.'
         required: true
@@ -34,6 +38,38 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+
+      - name: Require explicit SHA to match workflow and current main
+        shell: bash
+        env:
+          CONFIRMED_SHA: ${{ inputs.confirmed_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$CONFIRMED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::confirmed_sha must be the full 40-character lowercase hexadecimal SHA."
+            exit 1
+          fi
+          if [[ "$CONFIRMED_SHA" != "$WORKFLOW_SHA" ]]; then
+            echo "::error::The confirmed SHA does not match the workflow_dispatch commit. No migration was applied."
+            exit 1
+          fi
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ -z "$current_main" ]]; then
+            echo "::error::Could not resolve the current main SHA. No migration was applied."
+            exit 1
+          fi
+          if [[ "$CONFIRMED_SHA" != "$current_main" ]]; then
+            echo "::error::The confirmed SHA is no longer the current main HEAD. Re-inspect main and dispatch a new run."
+            exit 1
+          fi
+          {
+            echo "## Confirmed staging migration SHA"
+            echo
+            echo "- Reviewed SHA: `$CONFIRMED_SHA`"
+            echo "- Workflow checkout SHA: matched."
+            echo "- Current `main` HEAD: matched."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
