@@ -58,11 +58,20 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Enable email authentication only for disposable CI Supabase
+      - name: Verify public signup remains disabled in disposable CI Supabase
         run: |
-          set -euo pipefail
-          sed -i '/^\[auth\]$/,/^$/ s/^enable_signup = false$/enable_signup = true/' supabase/config.toml
-          sed -i '/^\[auth\.email\]$/,/^$/ s/^enable_signup = false$/enable_signup = true/' supabase/config.toml
+          python - <<'PY'
+          import tomllib
+
+          with open("supabase/config.toml", "rb") as config_file:
+              config = tomllib.load(config_file)
+
+          assert config["auth"]["enable_signup"] is False, "Public Auth signup must remain disabled"
+          assert (
+              config["auth"]["email"]["enable_signup"] is False
+          ), "Public email signup must remain disabled"
+          print("Public signup remains disabled.")
+          PY
       - name: Start disposable local Supabase
         run: supabase start
 
