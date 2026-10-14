@@ -153,6 +153,11 @@ try {
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await page.getByRole('heading', { name: 'YEAR95', exact: true }).waitFor({ state: 'visible' });
   await page.getByLabel('E-mail').waitFor({ state: 'visible' });
+  await page.waitForFunction(
+    () => !Object.keys(window.localStorage).some((key) => /^sb-.*-auth-token$/.test(key)),
+    null,
+    { timeout: 5_000 },
+  );
 
   const storedSessionsAfterLogout = await persistedSupabaseSessionKeys(page);
   assert.deepEqual(
