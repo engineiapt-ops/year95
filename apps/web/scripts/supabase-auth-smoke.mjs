@@ -9,8 +9,7 @@ const SUPABASE_SERVICE_ROLE_KEY = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
 const API_BASE_URL = requiredEnv('API_BASE_URL');
 const WEB_BASE_URL = requiredEnv('WEB_BASE_URL');
 const PLAYWRIGHT_MODULE = requiredEnv('PLAYWRIGHT_MODULE');
-const DIAGNOSTICS_PATH =
-  process.env.PLAYWRIGHT_DIAGNOSTICS_PATH ?? '/tmp/year95-playwright.log';
+const DIAGNOSTICS_PATH = process.env.PLAYWRIGHT_DIAGNOSTICS_PATH ?? '/tmp/year95-playwright.log';
 const email = process.env.AUTH_SMOKE_EMAIL ?? 'year95-auth-smoke@example.test';
 const password = process.env.AUTH_SMOKE_PASSWORD ?? 'Year95-local-smoke-2026!';
 
