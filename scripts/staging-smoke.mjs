@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 const WEB_URL = requiredHttpsOrigin('STAGING_WEB_URL');
 const API_URL = requiredHttpsOrigin('STAGING_API_URL');
-const SUPABASE_URL = requiredHttpsOrigin('STAGING_SUPABASE_URL');
-const SUPABASE_ANON_KEY = requiredEnv('STAGING_SUPABASE_ANON_KEY');
 const TEST_EMAIL = requiredEnv('STAGING_AUTH_TEST_EMAIL');
 const TEST_PASSWORD = requiredEnv('STAGING_AUTH_TEST_PASSWORD');
 const PLAYWRIGHT_MODULE = requiredEnv('PLAYWRIGHT_MODULE');
 
 async function main() {
+  await verifyWeb();
   await verifyReadiness();
 
   const { chromium } = await import(pathToFileURL(PLAYWRIGHT_MODULE).href);
@@ -64,6 +64,21 @@ async function main() {
   } finally {
     await browser.close();
   }
+}
+
+async function verifyWeb() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      const response = await fetch(`${WEB_URL}/login`, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (response.status === 200) return;
+    } catch {
+      // Pages propagation can lag the completed deployment action; retry without logging URLs.
+    }
+    await sleep(5_000);
+  }
+  throw new Error('Staging web /login did not become reachable');
 }
 
 async function verifyReadiness() {
