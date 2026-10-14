@@ -102,7 +102,7 @@ jobs:
             printf 'SUPABASE_URL=%s\n' "$API_URL"
             printf 'DATABASE_URL=%s\n' "$DB_URL"
             printf 'SUPABASE_ANON_KEY=%s\n' "$ANON_KEY"
-            printf 'API_BASE_URL=http://localhost:3000\n'
+            printf 'API_BASE_URL=http://127.0.0.1:3000\n'
             printf 'WEB_BASE_URL=http://localhost:5173\n'
           } >> "$GITHUB_ENV"
 
