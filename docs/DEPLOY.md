@@ -16,7 +16,7 @@ The old Vercel configuration and `docs/DEPLOYMENT.md` are not part of this deplo
 
 Use a separate staging project, never the production project. Obtain the project's URL, public anon key, and a PostgreSQL connection string that is reachable from GitHub-hosted runners. Prefer the direct endpoint or the Supabase session pooler on port 5432; do not use the transaction pooler on port 6543 for migrations.
 
-Create one dedicated, confirmed email/password test user in staging Auth. Insert the same lowercase email into `public.allowed_emails` in the staging database. Do this only in staging. Public signup remains disabled; the user is a pre-created test account.
+Create one dedicated, confirmed email/password test user in staging Auth. Public signup remains disabled; the user is a pre-created test account. After the staging migrations have created `public.allowed_emails`, insert the same lowercase email into that table using the staging Supabase SQL Editor. Do not do this in production.
 
 ### 2. Configure GitHub Environments
 
@@ -82,7 +82,7 @@ Never provide `DATABASE_URL`, a service-role key, Render credentials, or any pri
 ## Manually applying staging migrations
 
 1. Confirm that the workflow has been merged to `main` and that `staging-migrations` has required reviewers configured.
-2. Open **Actions → Staging database migrations → Run workflow**, select `main`, and enter the exact expected pending migration numbers (e.g. `024,025,026`). Enter `none` only if the staging database is already current.
+2. Open **Actions → Staging database migrations → Run workflow**, select `main`, and enter the exact expected pending migration numbers (for a brand-new database, the current full set is `024,025,026,027,028,029`). Enter `none` only if the staging database is already current.
 3. A maintainer must approve the protected environment before the job can access `STAGING_DATABASE_URL_MIGRATE`.
 4. The workflow validates the forward-only migration files, checks the expected pending set read-only, runs the official repository migration runner once, and verifies the migration ledger afterward. A mismatch fails closed before the runner starts. On failure, inspect the staging ledger before retrying.
 
