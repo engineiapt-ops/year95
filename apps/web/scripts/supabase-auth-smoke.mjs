@@ -97,6 +97,21 @@ try {
       recordDiagnostic(`request ${request.method()} ${requestUrl.href}`);
     }
   });
+  page.on('response', (response) => {
+    const responseUrl = new URL(response.url());
+    if (['/health', '/ready', '/v1/me'].includes(responseUrl.pathname)) {
+      const headers = response.headers();
+      recordDiagnostic(
+        `response ${response.request().method()} ${response.status()} ${responseUrl.href} :: ${JSON.stringify(
+          {
+            accessControlAllowOrigin: headers['access-control-allow-origin'] ?? null,
+            accessControlAllowMethods: headers['access-control-allow-methods'] ?? null,
+            accessControlAllowHeaders: headers['access-control-allow-headers'] ?? null,
+          },
+        )}`,
+      );
+    }
+  });
   page.on('requestfailed', (request) => {
     recordDiagnostic(
       `requestfailed ${request.method()} ${request.url()} :: ${
