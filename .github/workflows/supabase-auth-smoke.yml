@@ -58,6 +58,11 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+      - name: Enable email authentication only for disposable CI Supabase
+        run: |
+          set -euo pipefail
+          sed -i '/^\[auth\]$/,/^$/ s/^enable_signup = false$/enable_signup = true/' supabase/config.toml
+          sed -i '/^\[auth\.email\]$/,/^$/ s/^enable_signup = false$/enable_signup = true/' supabase/config.toml
       - name: Start disposable local Supabase
         run: supabase start
 
