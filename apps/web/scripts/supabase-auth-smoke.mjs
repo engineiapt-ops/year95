@@ -231,11 +231,20 @@ async function printDashboardDiagnostics(currentPage, error) {
       ];
     }
   }
+  let bodyText = '';
+  if (currentPage) {
+    try {
+      bodyText = await currentPage.locator('body').innerText();
+    } catch (diagnosticError) {
+      bodyText = `Could not read page text: ${diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)}`;
+    }
+  }
   const report = [
     'DASHBOARD FAILURE DIAGNOSTICS',
     `Reason: ${reason}`,
     `URL: ${currentPage?.url() ?? 'browser page was not created'}`,
     `Cards: ${JSON.stringify(cards, null, 2)}`,
+    `Visible page text: ${bodyText}`,
   ].join('\n');
   console.error(report);
   appendFileSync(DIAGNOSTICS_PATH, `\n${report}\n`, 'utf8');
