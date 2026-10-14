@@ -31,12 +31,9 @@ jobs:
       STAGING_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
       STAGING_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
       STAGING_AUTH_TEST_EMAIL: ${{ vars.STAGING_AUTH_TEST_EMAIL }}
-      STAGING_AUTH_TEST_PASSWORD: ${{ secrets.STAGING_AUTH_TEST_PASSWORD }}
       CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
-      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
 
     steps:
       - name: Checkout the exact commit that passed CI
@@ -66,6 +63,10 @@ jobs:
       - name: Validate staging configuration before changing infrastructure
         if: ${{ steps.freshness.outputs.deploy == 'true' }}
         shell: bash
+        env:
+          STAGING_AUTH_TEST_PASSWORD: ${{ secrets.STAGING_AUTH_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -euo pipefail
           required=(STAGING_API_URL STAGING_WEB_URL STAGING_SUPABASE_URL STAGING_SUPABASE_ANON_KEY STAGING_AUTH_TEST_EMAIL STAGING_AUTH_TEST_PASSWORD CLOUDFLARE_PAGES_PROJECT_NAME CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN RENDER_SERVICE_ID RENDER_API_KEY)
@@ -151,6 +152,8 @@ jobs:
         if: ${{ steps.freshness.outputs.deploy == 'true' }}
         id: render-deploy
         shell: bash
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -euo pipefail
           response="$RUNNER_TEMP/render-deploy-response.json"
@@ -179,6 +182,7 @@ jobs:
         if: ${{ steps.freshness.outputs.deploy == 'true' }}
         shell: bash
         env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_DEPLOY_ID: ${{ steps.render-deploy.outputs.deploy_id }}
         run: |
           set -euo pipefail
