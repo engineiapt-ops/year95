@@ -28,7 +28,6 @@ jobs:
       NODE_VERSION: 22
       PNPM_VERSION: 9.15.9
       EXPECTED_PENDING: ${{ inputs.expected_pending }}
-      DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
     steps:
       - name: Checkout reviewed main commit
         uses: actions/checkout@v4
@@ -60,6 +59,8 @@ jobs:
 
       - name: Validate staging database connection
         shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
         run: |
           set -euo pipefail
           if [[ -z "${DATABASE_URL_MIGRATE:-}" ]]; then
@@ -90,6 +91,8 @@ jobs:
 
       - name: Verify expected pending migration set (read-only)
         shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
         run: |
           set -euo pipefail
           if [[ ! "$EXPECTED_PENDING" =~ ^(none|[0-9]{3}(,[0-9]{3})*)$ ]]; then
@@ -140,6 +143,8 @@ jobs:
 
       - name: Apply forward-only staging migrations
         shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
         run: |
           set -euo pipefail
           if ! DATABASE_URL="$DATABASE_URL_MIGRATE" pnpm --filter @year95/persistence migrate >"$RUNNER_TEMP/staging-migrate.log" 2>&1; then
@@ -150,6 +155,8 @@ jobs:
 
       - name: Verify the full migration ledger after applying
         shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
         run: |
           set -euo pipefail
           applied_names="$(psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --command="SELECT name FROM public.schema_migrations WHERE origin = 'migration' ORDER BY name" 2>"$RUNNER_TEMP/staging-ledger-after.err")" || {
