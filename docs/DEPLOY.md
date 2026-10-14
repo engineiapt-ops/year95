@@ -22,26 +22,26 @@ Create one dedicated, confirmed email/password test user in staging Auth. Public
 
 In **Settings → Environments**, create two environments.
 
-**Environment `staging`** — used by the automated deploy workflow. Add these *variables*:
+**Environment `staging`** — used by the automated deploy workflow. Add these _variables_:
 
-| Variable | Meaning |
-|---|---|
-| `STAGING_API_URL` | Public Render API origin, e.g. `https://<service>.onrender.com`, with no trailing path |
-| `STAGING_WEB_URL` | Cloudflare Pages production origin, exactly `https://<project>.pages.dev` |
-| `STAGING_SUPABASE_URL` | Dedicated staging Supabase URL |
-| `STAGING_SUPABASE_ANON_KEY` | Public staging anon key (it is intentionally included in the browser build) |
-| `STAGING_AUTH_TEST_EMAIL` | Email of the pre-created, allowlisted staging test user |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | Existing Cloudflare Pages project name; use lowercase letters, numbers, and hyphens |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `RENDER_SERVICE_ID` | Existing Render service ID: `srv-db4il4ad0e5s73cg78g0` |
+| Variable                        | Meaning                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `STAGING_API_URL`               | Public Render API origin, e.g. `https://<service>.onrender.com`, with no trailing path |
+| `STAGING_WEB_URL`               | Cloudflare Pages production origin, exactly `https://<project>.pages.dev`              |
+| `STAGING_SUPABASE_URL`          | Dedicated staging Supabase URL                                                         |
+| `STAGING_SUPABASE_ANON_KEY`     | Public staging anon key (it is intentionally included in the browser build)            |
+| `STAGING_AUTH_TEST_EMAIL`       | Email of the pre-created, allowlisted staging test user                                |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | Existing Cloudflare Pages project name; use lowercase letters, numbers, and hyphens    |
+| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account ID                                                                  |
+| `RENDER_SERVICE_ID`             | Existing Render service ID: `srv-db4il4ad0e5s73cg78g0`                                 |
 
-Add these *secrets* to the same environment:
+Add these _secrets_ to the same environment:
 
-| Secret | Meaning |
-|---|---|
-| `RENDER_API_KEY` | Render API key with permission to deploy the staging service |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare token with Pages edit/deploy permission for the selected account |
-| `STAGING_AUTH_TEST_PASSWORD` | Password for the dedicated test account |
+| Secret                       | Meaning                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `RENDER_API_KEY`             | Render API key with permission to deploy the staging service                |
+| `CLOUDFLARE_API_TOKEN`       | Cloudflare token with Pages edit/deploy permission for the selected account |
+| `STAGING_AUTH_TEST_PASSWORD` | Password for the dedicated test account                                     |
 
 The configured web URL must exactly match `CORS_ORIGINS` on Render. Keep the Pages project URL on `pages.dev` for this phase; a final custom domain is out of scope.
 
@@ -49,8 +49,8 @@ The configured web URL must exactly match `CORS_ORIGINS` on Render. Keep the Pag
 
 Add this secret:
 
-| Secret | Meaning |
-|---|---|
+| Secret                         | Meaning                                                    |
+| ------------------------------ | ---------------------------------------------------------- |
 | `STAGING_DATABASE_URL_MIGRATE` | PostgreSQL connection string for the staging database only |
 
 Merely declaring an environment in YAML does not enable an approval gate. Verify the required-reviewer rule in GitHub Settings before using the workflow. Do not put the production connection string into this environment.
@@ -78,7 +78,7 @@ Provide the requested `sync: false` values in Render's dashboard. Set:
 - `SUPABASE_JWT_ISSUER`: `<STAGING_SUPABASE_URL>/auth/v1`.
 - `CORS_ORIGINS`: the exact `STAGING_WEB_URL` origin, with no trailing slash.
 
-If the remote database requires a custom root CA, also set `DATABASE_CA_CERT_PEM` in Render to the certificate PEM contents. Keep the CA and database connection string server-side only.
+The Blueprint also declares `DATABASE_CA_CERT_PEM` with `sync: false`. Fill it with the full certificate PEM only if the staging database requires a custom root CA; otherwise leave it empty. Keep the CA and database connection string server-side only.
 
 The public staging database must be migrated before API readiness can pass. After the workflow files are on `main`, run the manual migration workflow as described below, with approval, before relying on the first deployment.
 
@@ -104,7 +104,7 @@ Do not run migrations from the deploy workflow or as part of the API container s
 
 ## Automated deployment and post-deploy smoke
 
-After a push to `main`, the existing `CI` workflow must conclude with `success`. Only then can `Deploy staging` run. It verifies the SHA is still current and queries GitHub for a closed, merged PR whose base is `main` and whose `merge_commit_sha` exactly equals the CI SHA. A direct push fails this check even if CI passes; stale workflow runs are skipped rather than deploying older code.
+After a push to `main`, the existing `CI` workflow must conclude with `success`. Only then can `Deploy staging` run. It verifies the SHA is still current and queries GitHub for a closed, merged PR whose base is `main` and whose `merge_commit_sha` exactly equals the CI SHA. Use squash merge or a regular merge commit; a rebase merge may not satisfy this exact-SHA check and can block deployment. A direct push fails this check even if CI passes; stale workflow runs are skipped rather than deploying older code.
 
 For the validated SHA, the workflow builds and secret-scans the web bundle, triggers the Render API deploy through the Render API, waits for Render's deploy status to become `live`, and requires `GET /ready` to return HTTP 200 with `ready: true`. It then deploys the web bundle to Cloudflare Pages and runs `scripts/staging-smoke.mjs` in Chromium.
 
@@ -118,10 +118,10 @@ The free-plan deploy guard enforces a narrower guarantee: **a CI-green direct pu
 
 If a direct push to `main` occurs, do not bypass the deploy guard or manually deploy that SHA. Record it here with the date, full SHA, reason, and follow-up action; then restore the normal reviewed-PR path. The guard's failed workflow run and step summary also provide an audit trail.
 
-| Date (UTC) | Direct-push SHA | Reason and follow-up |
-|---|---|---|
-| — | No exceptions recorded | — |
+| Date (UTC) | Direct-push SHA        | Reason and follow-up |
+| ---------- | ---------------------- | -------------------- |
+| —          | No exceptions recorded | —                    |
 
 ## Costs and limits
 
-Cloudflare Pages has a free tier; Render's free service may spin down when idle, delaying readiness. The Render Blueprint uses the free plan for this minimal staging target. Confirm current plan limits and any account-specific billing terms in the providers' dashboards before provisioning. No final domain, worker, cron, WAF, or observability stack is included.
+Cloudflare Pages has a free tier; Render's free service may spin down when idle, delaying readiness. The API readiness loop makes up to 40 requests, each with a 15-second request timeout and a 15-second delay between attempts. Its total duration can approach 20 minutes if every request times out (roughly 10 minutes when responses return quickly). The Render Blueprint uses the free plan for this minimal staging target. Confirm current plan limits and any account-specific billing terms in the providers' dashboards before provisioning. No final domain, worker, cron, WAF, or observability stack is included.
