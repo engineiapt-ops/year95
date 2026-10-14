@@ -47,7 +47,10 @@ export class WebApiClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.getAccessToken = options.getAccessToken;
     this.onUnauthorized = options.onUnauthorized;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+    if (import.meta.env.DEV) {
+      console.debug(`[YEAR95] Resolved API base URL: ${JSON.stringify(this.baseUrl)}`);
+    }
   }
 
   getHealth(): Promise<HealthResponse> {
