@@ -33,7 +33,7 @@ In **Settings → Environments**, create two environments.
 | `STAGING_AUTH_TEST_EMAIL` | Email of the pre-created, allowlisted staging test user |
 | `CLOUDFLARE_PAGES_PROJECT_NAME` | Existing Cloudflare Pages project name; use lowercase letters, numbers, and hyphens |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `RENDER_SERVICE_ID` | Render service ID for `year95-api-staging` |
+| `RENDER_SERVICE_ID` | Existing Render service ID: `srv-db4il4ad0e5s73cg78g0` |
 
 Add these *secrets* to the same environment:
 
@@ -53,9 +53,20 @@ The configured web URL must exactly match `CORS_ORIGINS` on Render. Keep the Pag
 
 Merely declaring an environment in YAML does not enable an approval gate. The maintainer must configure required reviewers on `staging-migrations` in GitHub. Do not put the production connection string into this environment.
 
-### 3. Provision the Render API service
+### 3. Reconcile the existing Render API staging service
 
-Create a Render Blueprint from the repository's `render.yaml`. It defines `year95-api-staging` using `apps/api/Dockerfile`, a free web-service plan, and a health check on `/ready`; `autoDeployTrigger: off` prevents Render from deploying automatically on Git commits.
+The connected Render workspace already contains a service named `year95-api-staging` at `https://year95-api-staging.onrender.com` (service ID `srv-db4il4ad0e5s73cg78g0`). At the time this PR was prepared, its Render configuration still used the Node runtime, branch `feat/api-runtime-render`, automatic commit deploys, and no `/ready` health check. **Do not create a duplicate service and do not treat that existing service as compliant yet.**
+
+After the PR is merged, open the existing service in Render and reconcile it with this repository's `render.yaml` through Render Blueprint sync. Confirm that the existing resource is updated rather than duplicated, and verify the result explicitly:
+
+- Runtime is Docker, using `apps/api/Dockerfile` with the repository root as Docker context.
+- Connected branch is `main`.
+- Automatic deploys are disabled (`autoDeployTrigger: off`).
+- Health check path is `/ready`.
+- Region remains Frankfurt and the existing public URL is retained.
+- Plan and any cost-affecting change are reviewed before applying the sync.
+
+If Render proposes creating a second service or cannot reconcile the existing service safely, stop and resolve that mismatch in the dashboard instead of applying it blindly.
 
 Provide the requested `sync: false` values in Render's dashboard. Set:
 
