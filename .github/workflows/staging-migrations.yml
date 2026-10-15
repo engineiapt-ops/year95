@@ -1,0 +1,235 @@
+name: Staging database migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmed_sha:
+        description: 'Full 40-character SHA of the current main commit you reviewed. The run fails if it no longer matches main.'
+        required: true
+        type: string
+      expected_pending:
+        description: 'Expected pending migration numbers, comma-separated (for example 024,025,026), or none.'
+        required: true
+        default: none
+        type: string
+      dry_run:
+        description: 'Read-only preflight only. Keep true for validation; set false only to apply migrations.'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: year95-staging-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    name: Apply YEAR95 migrations (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging-migrations
+    env:
+      NODE_VERSION: 22
+      PNPM_VERSION: 9.15.9
+      EXPECTED_PENDING: ${{ inputs.expected_pending }}
+    steps:
+      - name: Checkout reviewed main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require explicit SHA to match workflow and current main
+        shell: bash
+        env:
+          CONFIRMED_SHA: ${{ inputs.confirmed_sha }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$CONFIRMED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::confirmed_sha must be the full 40-character lowercase hexadecimal SHA."
+            exit 1
+          fi
+          if [[ "$CONFIRMED_SHA" != "$WORKFLOW_SHA" ]]; then
+            echo "::error::The confirmed SHA does not match the workflow_dispatch commit. No migration was applied."
+            exit 1
+          fi
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ -z "$current_main" ]]; then
+            echo "::error::Could not resolve the current main SHA. No migration was applied."
+            exit 1
+          fi
+          if [[ "$CONFIRMED_SHA" != "$current_main" ]]; then
+            echo "::error::The confirmed SHA is no longer the current main HEAD. Re-inspect main and dispatch a new run."
+            exit 1
+          fi
+          {
+            echo "## Confirmed staging migration SHA"
+            echo
+            echo "- Reviewed SHA: `$CONFIRMED_SHA`"
+            echo "- Workflow checkout SHA: matched."
+            echo "- Current `main` HEAD: matched."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate forward-only migration files
+        run: pnpm check:migrations
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql-client
+
+      - name: Validate staging database connection
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_URL_MIGRATE:-}" ]]; then
+            echo "::error::Environment secret STAGING_DATABASE_URL_MIGRATE is missing."
+            exit 1
+          fi
+          echo "::add-mask::$DATABASE_URL_MIGRATE"
+          node --input-type=module <<'NODE'
+          const raw = process.env.DATABASE_URL_MIGRATE;
+          let url;
+          try {
+            url = new URL(raw);
+          } catch {
+            throw new Error('STAGING_DATABASE_URL_MIGRATE is not a valid URL; its value is withheld.');
+          }
+          if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+            throw new Error('STAGING_DATABASE_URL_MIGRATE must be a PostgreSQL URL.');
+          }
+          if (['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
+            throw new Error('Staging migrations require a remote staging database, not a local database.');
+          }
+          console.log('Remote PostgreSQL connection format validated; value withheld.');
+          NODE
+          PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --command='SELECT 1' >/dev/null 2>"$RUNNER_TEMP/staging-db-connect.err" || {
+            echo "::error::Unable to connect to the configured staging PostgreSQL database; connection diagnostics were withheld."
+            exit 1
+          }
+
+      - name: Verify expected pending migration set (read-only)
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_PENDING" =~ ^(none|[0-9]{3}(,[0-9]{3})*)$ ]]; then
+            echo "::error::expected_pending must be a comma-separated list such as 030,031,032, or none."
+            exit 1
+          fi
+
+          tracker_exists="$(psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --command="SELECT to_regclass('public.schema_migrations') IS NOT NULL" 2>"$RUNNER_TEMP/staging-ledger.err")" || {
+            echo "::error::Could not inspect the staging migration ledger; no migration was applied."
+            exit 1
+          }
+
+          if [[ "$tracker_exists" == "t" ]]; then
+            applied_names="$(psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --command="SELECT name FROM public.schema_migrations WHERE origin = 'migration' ORDER BY name" 2>"$RUNNER_TEMP/staging-ledger.err")" || {
+              echo "::error::Could not read the staging migration ledger; no migration was applied."
+              exit 1
+            }
+          else
+            user_table_count="$(psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --command="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'" 2>"$RUNNER_TEMP/staging-ledger.err")" || {
+              echo "::error::Could not check the empty-database bootstrap state; no migration was applied."
+              exit 1
+            }
+            if [[ "$user_table_count" != "0" ]]; then
+              echo "::error::The staging database has public tables but no migration ledger. Refusing automatic recovery."
+              exit 1
+            fi
+            applied_names=""
+          fi
+
+          actual_pending=()
+          for path in db/migrations/*.sql; do
+            name="${path##*/}"
+            if ! grep -Fqx -- "$name" <<< "$applied_names"; then
+              actual_pending+=("${name%%_*}")
+            fi
+          done
+
+          actual_csv="none"
+          if (( ${#actual_pending[@]} > 0 )); then
+            actual_csv="$(IFS=,; printf '%s' "${actual_pending[*]}")"
+          fi
+
+          if [[ "$actual_csv" != "$EXPECTED_PENDING" ]]; then
+            echo "::error::Pending migration mismatch. Expected '$EXPECTED_PENDING'; actual '$actual_csv'. No migration was applied."
+            exit 1
+          fi
+          echo "Read-only preflight passed. Expected pending set: $actual_csv."
+
+      - name: Report read-only dry-run result
+        if: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Staging migration dry-run passed"
+            echo
+            echo "- Confirmed SHA matches the workflow checkout and current `main`."
+            echo "- Staging PostgreSQL connection succeeded."
+            echo "- Expected pending migration set matched the read-only ledger check."
+            echo "- No migration SQL was applied."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Dry-run passed; no database changes were made."
+
+      - name: Apply forward-only staging migrations
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          if ! DATABASE_URL="$DATABASE_URL_MIGRATE" pnpm --filter @year95/persistence migrate >"$RUNNER_TEMP/staging-migrate.log" 2>&1; then
+            echo "::error::The staging migration runner failed. Raw output is withheld to avoid leaking connection details. Inspect the migration ledger before any retry."
+            exit 1
+          fi
+          echo "Staging migration runner completed."
+
+      - name: Verify the full migration ledger after applying
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          DATABASE_URL_MIGRATE: ${{ secrets.STAGING_DATABASE_URL_MIGRATE }}
+        run: |
+          set -euo pipefail
+          applied_names="$(psql "$DATABASE_URL_MIGRATE" --no-psqlrc --set=ON_ERROR_STOP=1 --quiet --tuples-only --no-align --command="SELECT name FROM public.schema_migrations WHERE origin = 'migration' ORDER BY name" 2>"$RUNNER_TEMP/staging-ledger-after.err")" || {
+            echo "::error::Could not verify the staging migration ledger after the run."
+            exit 1
+          }
+
+          expected_names=""
+          for path in db/migrations/*.sql; do
+            name="${path##*/}"
+            if [[ -n "$expected_names" ]]; then expected_names+=$'\n'; fi
+            expected_names+="$name"
+          done
+          if [[ "$applied_names" != "$expected_names" ]]; then
+            echo "::error::The post-migration ledger does not match the repository migration set. No automatic correction was attempted."
+            exit 1
+          fi
+          echo "Staging migration ledger matches all repository migrations."
