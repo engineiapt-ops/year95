@@ -348,8 +348,25 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
       isDatabaseReady = options.dependencies?.healthRepository
         ? await options.dependencies.healthRepository.isDatabaseReady()
         : false;
-    } catch {
-      request.log.warn('Database readiness probe failed');
+    } catch (error: unknown) {
+      const diagnostic =
+        typeof error === 'object' && error !== null
+          ? error as { name?: unknown; code?: unknown }
+          : undefined;
+      const errorName =
+        typeof diagnostic?.name === 'string' && /^[A-Za-z][A-Za-z0-9]*$/.test(diagnostic.name)
+          ? diagnostic.name
+          : 'UnknownError';
+      const rawCode = diagnostic?.code;
+      const errorCode =
+        typeof rawCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(rawCode)
+          ? rawCode
+          : undefined;
+
+      request.log.warn(
+        { errorName, ...(errorCode ? { errorCode } : {}) },
+        'Database readiness probe failed',
+      );
     }
 
     const response = readyResponseSchema.parse({
