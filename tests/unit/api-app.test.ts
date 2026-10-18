@@ -90,7 +90,6 @@ describe('YEAR95 API runtime', () => {
     }
   });
 
-
   it.each([
     { code: 'ENOTFOUND', expectedCode: 'ENOTFOUND' },
     { code: 'bad value with spaces', expectedCode: 'unknown' },
@@ -146,7 +145,6 @@ describe('YEAR95 API runtime', () => {
       }
     },
   );
-
 });
 
 describe('YEAR95 API shell contracts', () => {
