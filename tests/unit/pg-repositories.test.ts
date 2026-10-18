@@ -68,7 +68,9 @@ describe('PgAllowlistRepository', () => {
   });
 });
 describe('PgHealthRepository', () => {
-  it('returns false if database check fails', async () => {
-    await expect(new PgHealthRepository(database([], true)).isDatabaseReady()).resolves.toBe(false);
+  it('propagates database probe errors so the API can log sanitized diagnostics', async () => {
+    await expect(new PgHealthRepository(database([], true)).isDatabaseReady()).rejects.toThrow(
+      'database unavailable',
+    );
   });
 });

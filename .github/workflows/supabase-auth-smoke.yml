@@ -60,7 +60,7 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.121.0
       - name: Check local Auth settings
         run: |
           python - <<'PY'
@@ -84,6 +84,12 @@ jobs:
 
           print("Global signup disabled; email signup enabled; optional external provider flag validated.")
           PY
+      - name: Authenticate Docker Hub to avoid anonymous pull limits
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Start disposable local Supabase
         run: supabase start
 

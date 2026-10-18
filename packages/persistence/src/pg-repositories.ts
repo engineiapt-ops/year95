@@ -86,11 +86,7 @@ export class PgAllowlistRepository implements AllowlistRepository {
 export class PgHealthRepository implements HealthRepository {
   constructor(private readonly db: PgQueryable) {}
   async isDatabaseReady(): Promise<boolean> {
-    try {
-      await this.db.query('SELECT 1');
-      return true;
-    } catch {
-      return false;
-    }
+    await this.db.query('SELECT 1');
+    return true;
   }
 }

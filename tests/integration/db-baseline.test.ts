@@ -874,7 +874,9 @@ integrationTest(
           throw new Error('database unavailable');
         },
       };
-      await expect(new PgHealthRepository(unavailable).isDatabaseReady()).resolves.toBe(false);
+      await expect(new PgHealthRepository(unavailable).isDatabaseReady()).rejects.toThrow(
+        'database unavailable',
+      );
     });
   },
 );

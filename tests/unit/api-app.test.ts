@@ -1,3 +1,4 @@
+import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../packages/config/src/index.js';
 import {
@@ -88,6 +89,62 @@ describe('YEAR95 API runtime', () => {
       await app.close();
     }
   });
+
+  it.each([
+    { code: 'ENOTFOUND', expectedCode: 'ENOTFOUND' },
+    { code: 'bad value with spaces', expectedCode: 'unknown' },
+  ])(
+    'logs only sanitized readiness diagnostics when error code is "$code"',
+    async ({ code, expectedCode }) => {
+      const chunks: string[] = [];
+      const logStream = new Writable({
+        write(chunk, _encoding, callback) {
+          chunks.push(String(chunk));
+          callback();
+        },
+      });
+      const connectionUrl = 'postgresql://user:SECRET@db.fake-host.test/db';
+      const databaseError = Object.assign(new Error(`connect failed for ${connectionUrl}`), {
+        code,
+      });
+      const app = buildApp({
+        config: loadConfig('api', { NODE_ENV: 'test', LOG_LEVEL: 'warn' }),
+        logStream,
+        dependencies: {
+          healthRepository: {
+            isDatabaseReady: async () => {
+              throw databaseError;
+            },
+          },
+        },
+      });
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/ready' });
+        expect(response.statusCode).toBe(503);
+
+        const output = chunks.join('');
+        const records = output
+          .split('\n')
+          .filter((line) => line.length > 0)
+          .map((line) => JSON.parse(line) as Record<string, unknown>);
+        const readinessLog = records.find(
+          (record) => record.msg === 'Database readiness probe failed',
+        );
+
+        expect(readinessLog).toBeDefined();
+        expect(output).not.toContain('SECRET');
+        expect(output).not.toContain('db.fake-host.test');
+        expect(output).not.toContain('postgresql://');
+        expect(readinessLog).toMatchObject({
+          errorName: 'Error',
+          errorCode: expectedCode,
+        });
+      } finally {
+        await app.close();
+      }
+    },
+  );
 });
 
 describe('YEAR95 API shell contracts', () => {
