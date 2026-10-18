@@ -126,3 +126,12 @@ If a direct push to `main` occurs, do not bypass the deploy guard or manually de
 ## Costs and limits
 
 Cloudflare Pages has a free tier; Render's free service may spin down when idle, delaying readiness. The API readiness loop makes up to 40 requests, each with a 15-second request timeout and a 15-second delay between attempts. Its total duration can approach 20 minutes if every request times out (roughly 10 minutes when responses return quickly). The Render Blueprint uses the free plan for this minimal staging target. Confirm current plan limits and any account-specific billing terms in the providers' dashboards before provisioning. No final domain, worker, cron, WAF, or observability stack is included.
+
+## Cloudflare Pages GitHub status check
+
+Cloudflare Pages preview deployments are intentionally disabled for this project. As a result, GitHub push events for non-production branches can appear in Cloudflare's deployment list as skipped with reason `preview_deployments_disabled`. The associated “Cloudflare Pages” check may remain pending or appear non-successful even though no preview build is expected.
+
+Treat this check as **informational, not a merge gate**. Do not re-enable automatic preview or production deployments just to make the check green. Review the actual required GitHub Actions checks instead: CI (typecheck, lint, architecture, unit, contract, integration, build), API Docker, and Local Supabase Auth Smoke. The Pages status does not replace any of these tests.
+
+The controlled Pages publication path is the `Deploy staging` workflow in `.github/workflows/deploy.yml`, which uploads `apps/web/dist` using Wrangler only after successful CI for the exact current main merge commit and after the staging API readiness gate. This is the intended path; consider the deployment path operationally proven only after a complete successful staging workflow run, including the Cloudflare upload and post-deploy browser smoke test.
+
