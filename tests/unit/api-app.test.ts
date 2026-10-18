@@ -126,7 +126,7 @@ describe('YEAR95 API runtime', () => {
 
         const output = chunks.join('');
         const records = output
-          .split('\\n')
+          .split('\n')
           .filter((line) => line.length > 0)
           .map((line) => JSON.parse(line) as Record<string, unknown>);
         const readinessLog = records.find(
