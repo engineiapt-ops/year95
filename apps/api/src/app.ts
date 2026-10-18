@@ -351,7 +351,7 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
     } catch (error: unknown) {
       const diagnostic =
         typeof error === 'object' && error !== null
-          ? error as { name?: unknown; code?: unknown }
+          ? (error as { name?: unknown; code?: unknown })
           : undefined;
       const errorName =
         typeof diagnostic?.name === 'string' && /^[A-Za-z][A-Za-z0-9]*$/.test(diagnostic.name)
@@ -359,9 +359,7 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
           : 'UnknownError';
       const rawCode = diagnostic?.code;
       const errorCode =
-        typeof rawCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(rawCode)
-          ? rawCode
-          : undefined;
+        typeof rawCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(rawCode) ? rawCode : undefined;
 
       request.log.warn(
         { errorName, ...(errorCode ? { errorCode } : {}) },
