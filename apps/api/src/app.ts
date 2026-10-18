@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyLoggerStreamDestination,
+  type FastifyReply,
+} from 'fastify';
 import type { ApiConfig } from '@year95/config';
 import type { AllowlistRepository, HealthRepository, HttpErrorCode } from '@year95/contracts';
 import {
@@ -48,6 +52,8 @@ export interface ApiDependencies {
 export interface ApiAppOptions {
   readonly config: ApiConfig;
   readonly dependencies?: ApiDependencies;
+  /** Optional logger destination for deterministic diagnostics tests. */
+  readonly logStream?: FastifyLoggerStreamDestination;
   /**
    * Extension point for future HTTP contracts. Routes registered here are always
    * nested under /v1 and can opt into the independent heavy rate limit.
@@ -187,6 +193,7 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
+      ...(options.logStream ? { stream: options.logStream } : {}),
       redact: {
         paths: [
           'req.headers.authorization',
@@ -359,12 +366,9 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
           : 'UnknownError';
       const rawCode = diagnostic?.code;
       const errorCode =
-        typeof rawCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(rawCode) ? rawCode : undefined;
+        typeof rawCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(rawCode) ? rawCode : 'unknown';
 
-      request.log.warn(
-        { errorName, ...(errorCode ? { errorCode } : {}) },
-        'Database readiness probe failed',
-      );
+      request.log.warn({ errorName, errorCode }, 'Database readiness probe failed');
     }
 
     const response = readyResponseSchema.parse({
