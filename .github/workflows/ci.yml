@@ -126,7 +126,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Unit
-        run: pnpm test:unit
+        run: pnpm test:unit --reporter=verbose
 
   component:
     name: component
