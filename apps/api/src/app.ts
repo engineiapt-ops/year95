@@ -368,7 +368,10 @@ export function buildApp(options: ApiAppOptions): FastifyInstance {
       const errorCode =
         typeof rawCode === 'string' && /^[A-Z0-9_]{1,32}$/.test(rawCode) ? rawCode : 'unknown';
 
-      request.log.warn({ errorName, errorCode }, 'Database readiness probe failed');
+      request.log.warn(
+        { errorName, errorCode, errorMessage: error instanceof Error ? error.message : String(error) },
+        'Database readiness probe failed',
+      );
     }
 
     const response = readyResponseSchema.parse({
