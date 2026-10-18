@@ -133,5 +133,7 @@ Cloudflare Pages preview deployments are intentionally disabled for this project
 
 Treat this check as **informational, not a merge gate**. Do not re-enable automatic preview or production deployments just to make the check green. Review the actual required GitHub Actions checks instead: CI (typecheck, lint, architecture, unit, contract, integration, build), API Docker, and Local Supabase Auth Smoke. The Pages status does not replace any of these tests.
 
+The Docker Hub login mitigates anonymous pull limits, but recent smoke logs still contain `toomanyrequests` responses even though `supabase start` and the browser smoke completed successfully. Do not treat the rate-limit warnings as resolved; if a future smoke fails on image pulls, investigate an image mirror or explicit cache rather than adding retries.
+
 The only valid publication is a successful run of the `Deploy staging` workflow in `.github/workflows/deploy.yml`. That workflow uploads `apps/web/dist` using Wrangler only after successful CI for the exact current main merge commit and after the staging API readiness gate. A green or skipped Cloudflare Pages Git check does not mean that anything was published. Consider the controlled deployment path operationally proven only after a complete successful `Deploy staging` run, including the Cloudflare upload and post-deploy browser smoke test.
 
