@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, {
   type FastifyInstance,
-  type FastifyLoggerStreamDestination,
+  type FastifyLoggerOptions,
   type FastifyReply,
 } from 'fastify';
 import type { ApiConfig } from '@year95/config';
@@ -53,7 +53,7 @@ export interface ApiAppOptions {
   readonly config: ApiConfig;
   readonly dependencies?: ApiDependencies;
   /** Optional logger destination for deterministic diagnostics tests. */
-  readonly logStream?: FastifyLoggerStreamDestination;
+  readonly logStream?: FastifyLoggerOptions['stream'];
   /**
    * Extension point for future HTTP contracts. Routes registered here are always
    * nested under /v1 and can opt into the independent heavy rate limit.
