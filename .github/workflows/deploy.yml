@@ -15,7 +15,6 @@ on:
 permissions:
   contents: read
   actions: read
-  checks: read
 
 concurrency:
   group: year95-production-deploy
@@ -44,6 +43,11 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
     steps:
+      - name: Mask production secrets before any other step
+        shell: bash
+        run: |
+          set -euo pipefail
+
       - name: Checkout the workflow-dispatch commit
         uses: actions/checkout@v4
         with:
@@ -149,6 +153,7 @@ jobs:
           fi
           node --input-type=module <<'NODE'
           const expected = {
+            // Historical naming only: this existing Render service is the production API target.
             PRODUCTION_API_URL: 'https://year95-api-staging.onrender.com',
             PRODUCTION_SUPABASE_URL: 'https://dhvigrzfjipshubcbuaa.supabase.co',
             CLOUDFLARE_PAGES_PROJECT_NAME: 'year95-web',
