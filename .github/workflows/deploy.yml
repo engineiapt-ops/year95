@@ -150,6 +150,9 @@ jobs:
           node --input-type=module <<'NODE'
           const expected = {
             PRODUCTION_API_URL: 'https://year95-api-staging.onrender.com',
+            PRODUCTION_SUPABASE_URL: 'https://dhvigrzfjipshubcbuaa.supabase.co',
+            CLOUDFLARE_PAGES_PROJECT_NAME: 'year95-web',
+            RENDER_SERVICE_ID: 'srv-db4il4ad0e5s73cg78g0',
             PRODUCTION_WEB_URL: 'https://year95-web.pages.dev',
           };
           for (const [name, exactValue] of Object.entries(expected)) {
