@@ -52,7 +52,7 @@ The only Supabase values passed to the frontend build are the public URL and ano
 
 In **Settings → Environments → production**, configure a required reviewer before using the publication workflow. GitHub does not create an approval gate merely because a job declares `environment: production`.
 
-Only the `publish` job references the protected environment, so validation does not ask for production credentials or create a second approval prompt. After the single publication approval, the job validates all 11 required configuration values and checks the pinned production destinations before making any provider API call.
+Only the `publish` job references the protected environment, so validation does not ask for production credentials or create a second approval prompt. After the single publication approval, the job validates all 11 required configuration values and checks the pinned production destinations before making any provider API call. If the repository owner is the only person able to approve, do not enable the option that prevents the workflow initiator from approving their own run; otherwise publication can become impossible to approve. This is an explicit approval gate, not independent two-person review.
 
 Use a dedicated production test account, not a real user's credentials. The account must already be able to authenticate and access the dashboard. The smoke test does not create users or change the database.
 
