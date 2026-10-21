@@ -17,6 +17,9 @@ abort "Expected publish job." unless jobs.key?("publish")
 validate = jobs.fetch("validate")
 publish = jobs.fetch("publish")
 
+abort "validate must not require production credentials or approval." if
+  validate.key?("environment") || validate.to_s.include?("secrets.")
+
 needs = publish["needs"]
 needs = [needs] unless needs.is_a?(Array)
 abort "publish must depend on validate." unless needs.include?("validate")
@@ -26,21 +29,29 @@ abort "publish must fail closed unless validate succeeded." unless
   publish_condition.include?("needs.validate.result == 'success'")
 
 environment = publish["environment"]
-abort "publish must target the production environment." unless
+abort "publish must target the protected production environment." unless
   environment.is_a?(Hash) && environment["name"] == "production"
 
 validate_steps = validate.fetch("steps")
 publish_steps = publish.fetch("steps")
-abort "validate must mask secrets before other steps." unless
-  validate_steps.first&.fetch("name", nil) == "Mask production secrets before any other step"
 abort "publish must mask secrets before other steps." unless
   publish_steps.first&.fetch("name", nil) == "Mask production secrets before any other step"
-abort "publish must include the Render deployment step." unless
-  publish_steps.any? { |step| step["name"] == "Trigger Render deploy for the confirmed production commit" }
+
+step_names = publish_steps.map { |step| step["name"] }
+config_index = step_names.index("Gate 4 — validate production configuration before provider calls")
+render_index = step_names.index("Trigger Render deploy for the confirmed production commit")
+final_gate_index = step_names.index("Final gate — recheck release SHA immediately before Render")
+cloudflare_index = step_names.index("Deploy production web bundle to Cloudflare Pages")
+smoke_index = step_names.index("Run production readiness and browser login smoke test")
+
+abort "Production configuration must be checked before provider calls." unless
+  config_index && render_index && config_index < render_index
+abort "Release freshness must be rechecked immediately before the Render deploy." unless
+  final_gate_index && render_index && final_gate_index < render_index
 abort "publish must include the Cloudflare Pages deployment step." unless
-  publish_steps.any? { |step| step["name"] == "Deploy production web bundle to Cloudflare Pages" }
-abort "publish must include the production smoke test." unless
-  publish_steps.any? { |step| step["name"] == "Run production readiness and browser login smoke test" }
+  cloudflare_index && render_index && render_index < cloudflare_index
+abort "publish must run production smoke tests after deployment." unless
+  smoke_index && cloudflare_index && cloudflare_index < smoke_index
 
 abort "Staging-specific configuration must not remain in the production workflow." if
   source.match?(/STAGING_[A-Z0-9_]+/)
