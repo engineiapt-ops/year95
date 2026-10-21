@@ -60,7 +60,9 @@ async function main() {
     );
 
     console.log('PASS: production API /ready reports ready=true');
-    console.log('PASS: production browser login reaches the dashboard with live API and identity cards');
+    console.log(
+      'PASS: production browser login reaches the dashboard with live API and identity cards',
+    );
   } finally {
     await browser.close();
   }
