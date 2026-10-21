@@ -17,6 +17,21 @@ The existing Render API service is the production target for this release:
 
 The existing Cloudflare Pages target is project `year95-web` at `https://year95-web.pages.dev`. The Render service's `staging` name is historical nomenclature; for this release, its target role is production.
 
+### Render API runtime configuration
+
+Before the first controlled production release, inspect the existing Render service's **Environment** page. Keep the database connection server-side and do not paste or send its value in chat. Confirm these runtime settings point at the same production Supabase project:
+
+| Render environment variable | Required value or check |
+| --- | --- |
+| `DATABASE_URL` | Existing PostgreSQL connection string for the confirmed production Supabase project; verify its database host/pooler project reference matches `dhvigrzfjipshubcbuaa` without copying the string elsewhere |
+| `SUPABASE_URL` | `https://dhvigrzfjipshubcbuaa.supabase.co` |
+| `SUPABASE_JWKS_URL` | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1/.well-known/jwks.json` |
+| `SUPABASE_JWT_ISSUER` | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1` |
+| `CORS_ORIGINS` | Exactly `https://year95-web.pages.dev`, with no trailing slash or extra origins unless explicitly reviewed |
+| `DATABASE_CA_CERT_PEM` | Keep the full database root CA PEM only if required by the selected connection's TLS chain; follow [Database deployment and SSL](DEPLOY-DB.md) |
+
+Also confirm the service remains on branch `main`, automatic Render deploys are disabled, and health check path is `/ready`. Do not change the database connection or other existing service variables as part of this workflow PR; correct a mismatch only under a separately reviewed operational change.
+
 This document describes the manual production release path. It replaces the older instructions that required creating a separate staging Supabase project. It does not authorize infrastructure creation, production migrations, or database schema changes.
 
 ## Production environment configuration
