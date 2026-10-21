@@ -1,0 +1,24 @@
+name: Production deploy structure test
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/production-deploy-structure-test.yml"
+      - "scripts/test-production-deploy-workflow.rb"
+
+permissions:
+  contents: read
+
+jobs:
+  structure:
+    name: Validate production workflow structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+      - name: Verify Ruby and YAML parser
+        run: ruby --version
+      - name: Run structural guard
+        run: ruby scripts/test-production-deploy-workflow.rb
