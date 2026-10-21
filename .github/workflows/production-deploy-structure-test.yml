@@ -3,9 +3,9 @@ name: Production deploy structure test
 on:
   pull_request:
     paths:
-      - ".github/workflows/deploy.yml"
-      - ".github/workflows/production-deploy-structure-test.yml"
-      - "scripts/test-production-deploy-workflow.rb"
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/production-deploy-structure-test.yml'
+      - 'scripts/test-production-deploy-workflow.rb'
 
 permissions:
   contents: read
