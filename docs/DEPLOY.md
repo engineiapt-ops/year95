@@ -86,4 +86,4 @@ Render and Cloudflare publication is sequential rather than transactional. If Re
 
 ## Costs and limits
 
-The current Render service reports the free plan. Free services can spin down while idle and delay readiness. The workflow waits up to 30 minutes for the Render deployment and then retries API readiness for up to 10 minutes when requests return quickly, longer when requests time out. Review provider dashboards for current limits and account-specific billing before changing service plans or enabling paid infrastructure.
+The current Render service reports the free plan. Free services can spin down while idle and delay readiness. The workflow waits up to 30 minutes for the Render deployment. API readiness retries run for about 10 minutes when responses return quickly and can take up to 20 minutes when each request reaches its 15-second timeout. Review provider dashboards for current limits and account-specific billing before changing service plans or enabling paid infrastructure.
