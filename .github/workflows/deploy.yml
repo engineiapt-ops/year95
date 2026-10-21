@@ -47,6 +47,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "::add-mask::$PRODUCTION_AUTH_TEST_PASSWORD"
+          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+          echo "::add-mask::$RENDER_API_KEY"
 
       - name: Checkout the workflow-dispatch commit
         uses: actions/checkout@v4
