@@ -21,14 +21,14 @@ The existing Cloudflare Pages target is project `year95-web` at `https://year95-
 
 Before the first controlled production release, inspect the existing Render service's **Environment** page. Keep the database connection server-side and do not paste or send its value in chat. Confirm these runtime settings point at the same production Supabase project:
 
-| Render environment variable | Required value or check |
-| --- | --- |
-| `DATABASE_URL` | Existing PostgreSQL connection string for the confirmed production Supabase project; verify its database host/pooler project reference matches `dhvigrzfjipshubcbuaa` without copying the string elsewhere |
-| `SUPABASE_URL` | `https://dhvigrzfjipshubcbuaa.supabase.co` |
-| `SUPABASE_JWKS_URL` | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1/.well-known/jwks.json` |
-| `SUPABASE_JWT_ISSUER` | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1` |
-| `CORS_ORIGINS` | Exactly `https://year95-web.pages.dev`, with no trailing slash or extra origins unless explicitly reviewed |
-| `DATABASE_CA_CERT_PEM` | Keep the full database root CA PEM only if required by the selected connection's TLS chain; follow [Database deployment and SSL](DEPLOY-DB.md) |
+| Render environment variable | Required value or check                                                                                                                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | Existing PostgreSQL connection string for the confirmed production Supabase project; verify its database host/pooler project reference matches `dhvigrzfjipshubcbuaa` without copying the string elsewhere |
+| `SUPABASE_URL`              | `https://dhvigrzfjipshubcbuaa.supabase.co`                                                                                                                                                                 |
+| `SUPABASE_JWKS_URL`         | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1/.well-known/jwks.json`                                                                                                                                   |
+| `SUPABASE_JWT_ISSUER`       | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1`                                                                                                                                                         |
+| `CORS_ORIGINS`              | Exactly `https://year95-web.pages.dev`, with no trailing slash or extra origins unless explicitly reviewed                                                                                                 |
+| `DATABASE_CA_CERT_PEM`      | Keep the full database root CA PEM only if required by the selected connection's TLS chain; follow [Database deployment and SSL](DEPLOY-DB.md)                                                             |
 
 Also confirm the service remains on branch `main`, automatic Render deploys are disabled, and health check path is `/ready`. Do not change the database connection or other existing service variables as part of this workflow PR; correct a mismatch only under a separately reviewed operational change.
 
@@ -40,24 +40,24 @@ Configure these under **GitHub → Settings → Environments → production**. T
 
 ### Variables
 
-| Variable | Value/source |
-| --- | --- |
-| `PRODUCTION_API_URL` | Existing Render API origin shown above |
-| `PRODUCTION_WEB_URL` | `https://year95-web.pages.dev` |
-| `PRODUCTION_SUPABASE_URL` | `https://dhvigrzfjipshubcbuaa.supabase.co` |
-| `PRODUCTION_SUPABASE_ANON_KEY` | Public anon key from the confirmed production Supabase project |
-| `PRODUCTION_AUTH_TEST_EMAIL` | Dedicated production smoke-test account |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | `year95-web` |
-| `CLOUDFLARE_ACCOUNT_ID` | Account ID for the intended production Pages project |
-| `RENDER_SERVICE_ID` | `srv-db4il4ad0e5s73cg78g0` |
+| Variable                        | Value/source                                                   |
+| ------------------------------- | -------------------------------------------------------------- |
+| `PRODUCTION_API_URL`            | Existing Render API origin shown above                         |
+| `PRODUCTION_WEB_URL`            | `https://year95-web.pages.dev`                                 |
+| `PRODUCTION_SUPABASE_URL`       | `https://dhvigrzfjipshubcbuaa.supabase.co`                     |
+| `PRODUCTION_SUPABASE_ANON_KEY`  | Public anon key from the confirmed production Supabase project |
+| `PRODUCTION_AUTH_TEST_EMAIL`    | Dedicated production smoke-test account                        |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | `year95-web`                                                   |
+| `CLOUDFLARE_ACCOUNT_ID`         | Account ID for the intended production Pages project           |
+| `RENDER_SERVICE_ID`             | `srv-db4il4ad0e5s73cg78g0`                                     |
 
 ### Secrets
 
-| Secret | Value/source |
-| --- | --- |
-| `PRODUCTION_AUTH_TEST_PASSWORD` | Password for the dedicated production smoke-test account |
-| `CLOUDFLARE_API_TOKEN` | Token scoped to deploy the selected Pages project |
-| `RENDER_API_KEY` | Render API key with permission to deploy the existing service |
+| Secret                          | Value/source                                                  |
+| ------------------------------- | ------------------------------------------------------------- |
+| `PRODUCTION_AUTH_TEST_PASSWORD` | Password for the dedicated production smoke-test account      |
+| `CLOUDFLARE_API_TOKEN`          | Token scoped to deploy the selected Pages project             |
+| `RENDER_API_KEY`                | Render API key with permission to deploy the existing service |
 
 Never commit values for these entries to the repository or send them in chat. The API's database connection configuration remains server-side in Render; this workflow must not receive a PostgreSQL connection string, a Supabase service-role key, or any other database credential.
 
