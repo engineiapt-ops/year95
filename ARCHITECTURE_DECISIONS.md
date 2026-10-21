@@ -9,6 +9,7 @@ Canonical architecture decisions are maintained in versioned ADRs under `docs/ad
 - [ADR-0005 — Sizing Semantics](docs/adr/0005-sizing-semantics.md)
 - [ADR-0006 — Deterministic Decision (D1)](docs/adr/0006-deterministic-decision.md)
 - [ADR-0007 — Frozen Database Baseline (D6)](docs/adr/0007-frozen-db-baseline.md)
+- [ADR-0008 — Manual Production Publication](docs/adr/0008-manual-production-publication.md)
 
 Related contracts and evidence:
 
