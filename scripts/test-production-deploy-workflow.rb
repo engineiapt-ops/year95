@@ -32,7 +32,6 @@ environment = publish["environment"]
 abort "publish must target the protected production environment." unless
   environment.is_a?(Hash) && environment["name"] == "production"
 
-validate_steps = validate.fetch("steps")
 publish_steps = publish.fetch("steps")
 abort "publish must mask secrets before other steps." unless
   publish_steps.first&.fetch("name", nil) == "Mask production secrets before any other step"
