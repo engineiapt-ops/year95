@@ -1,138 +1,104 @@
-# Staging deployment
+# Production deployment
 
-## Scope and safety
+## Production targets
 
-The first staging deploy uses a Docker web service on Render for the YEAR95 API and Cloudflare Pages for `apps/web`. The Render service has automatic deploys disabled. The `.github/workflows/deploy.yml` workflow is triggered only after the `CI` workflow completes successfully for a push to `main`; it checks that the tested SHA is still the current `main` SHA **and** that GitHub associates that exact commit with a closed, merged PR into `main`. Direct pushes to `main` are not deployed to staging, even when CI passes. The workflow deploys only the verified merge SHA, waits for deployment state `live` and API readiness, deploys the web bundle, and runs a public browser-login smoke test.
+The maintainer confirmed that the Supabase project at `https://dhvigrzfjipshubcbuaa.supabase.co` is the production database. Do not create a second Supabase project just to preserve a historical environment label.
 
-Database migrations are deliberately separate. They are only applied by manual dispatch of `.github/workflows/staging-migrations.yml` from `main`, after the GitHub Environment `staging-migrations` has been configured to require approval from a maintainer. A Render service startup and a normal deploy never apply migrations.
+The existing Render API service is the production target for this release:
 
-No environment-specific values or secrets belong in this repository. Do not add production database URLs, Supabase service-role keys, Render API keys, Cloudflare tokens, or test-account passwords to source control or to `VITE_*` variables.
+- Service ID: `srv-db4il4ad0e5s73cg78g0`
+- Existing service name: `year95-api-staging`
+- Public API origin: `https://year95-api-staging.onrender.com`
+- Runtime: Docker, using `apps/api/Dockerfile` from the repository root
+- Branch: `main`
+- Automatic Render deploys: disabled
+- Health check: `/ready`
+- Region: Frankfurt
 
-The old Vercel configuration and `docs/DEPLOYMENT.md` are not part of this deployment path; the minimum staging setup does not port them.
+The existing Cloudflare Pages target is project `year95-web` at `https://year95-web.pages.dev`. The Render service's `staging` name is historical nomenclature; for this release, its target role is production.
 
-## One-time infrastructure setup
+### Render API runtime configuration
 
-### 1. Create a dedicated staging Supabase project
+Before the first controlled production release, inspect the existing Render service's **Environment** page. Keep the database connection server-side and do not paste or send its value in chat. Confirm these runtime settings point at the same production Supabase project:
 
-Use a separate staging project, never the production project. Obtain the project's URL, public anon key, and a PostgreSQL connection string that is reachable from GitHub-hosted runners. Prefer the direct endpoint or the Supabase session pooler on port 5432; do not use the transaction pooler on port 6543 for migrations.
+| Render environment variable | Required value or check                                                                                                                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | Existing PostgreSQL connection string for the confirmed production Supabase project; verify its database host/pooler project reference matches `dhvigrzfjipshubcbuaa` without copying the string elsewhere |
+| `SUPABASE_URL`              | `https://dhvigrzfjipshubcbuaa.supabase.co`                                                                                                                                                                 |
+| `SUPABASE_JWKS_URL`         | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1/.well-known/jwks.json`                                                                                                                                   |
+| `SUPABASE_JWT_ISSUER`       | `https://dhvigrzfjipshubcbuaa.supabase.co/auth/v1`                                                                                                                                                         |
+| `CORS_ORIGINS`              | Exactly `https://year95-web.pages.dev`, with no trailing slash or extra origins unless explicitly reviewed                                                                                                 |
+| `DATABASE_CA_CERT_PEM`      | Keep the full database root CA PEM only if required by the selected connection's TLS chain; follow [Database deployment and SSL](DEPLOY-DB.md)                                                             |
 
-Create one dedicated, confirmed email/password test user in staging Auth. Public signup remains disabled; the user is a pre-created test account. After the staging migrations have created `public.allowed_emails`, insert the same lowercase email into that table using the staging Supabase SQL Editor. Do not do this in production.
+Also confirm the service remains on branch `main`, automatic Render deploys are disabled, and health check path is `/ready`. Do not change the database connection or other existing service variables as part of this workflow PR; correct a mismatch only under a separately reviewed operational change.
 
-### 2. Configure GitHub Environments
+This document describes the manual production release path. It replaces the older instructions that required creating a separate staging Supabase project. It does not authorize infrastructure creation, production migrations, or database schema changes.
 
-In **Settings → Environments**, create two environments.
+## Production environment configuration
 
-**Environment `staging`** — used by the automated deploy workflow. Add these _variables_:
+Configure these under **GitHub → Settings → Environments → production**. The workflow checks that every required value is present before contacting Render or Cloudflare.
 
-| Variable                        | Meaning                                                                                |
-| ------------------------------- | -------------------------------------------------------------------------------------- |
-| `STAGING_API_URL`               | Public Render API origin, e.g. `https://<service>.onrender.com`, with no trailing path |
-| `STAGING_WEB_URL`               | Cloudflare Pages production origin, exactly `https://<project>.pages.dev`              |
-| `STAGING_SUPABASE_URL`          | Dedicated staging Supabase URL                                                         |
-| `STAGING_SUPABASE_ANON_KEY`     | Public staging anon key (it is intentionally included in the browser build)            |
-| `STAGING_AUTH_TEST_EMAIL`       | Email of the pre-created, allowlisted staging test user                                |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | Existing Cloudflare Pages project name; use lowercase letters, numbers, and hyphens    |
-| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account ID                                                                  |
-| `RENDER_SERVICE_ID`             | Existing Render service ID: `srv-db4il4ad0e5s73cg78g0`                                 |
+### Variables
 
-Add these _secrets_ to the same environment:
+| Variable                        | Value/source                                                   |
+| ------------------------------- | -------------------------------------------------------------- |
+| `PRODUCTION_API_URL`            | Existing Render API origin shown above                         |
+| `PRODUCTION_WEB_URL`            | `https://year95-web.pages.dev`                                 |
+| `PRODUCTION_SUPABASE_URL`       | `https://dhvigrzfjipshubcbuaa.supabase.co`                     |
+| `PRODUCTION_SUPABASE_ANON_KEY`  | Public anon key from the confirmed production Supabase project |
+| `PRODUCTION_AUTH_TEST_EMAIL`    | Dedicated production smoke-test account                        |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | `year95-web`                                                   |
+| `CLOUDFLARE_ACCOUNT_ID`         | Account ID for the intended production Pages project           |
+| `RENDER_SERVICE_ID`             | `srv-db4il4ad0e5s73cg78g0`                                     |
 
-| Secret                       | Meaning                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| `RENDER_API_KEY`             | Render API key with permission to deploy the staging service                |
-| `CLOUDFLARE_API_TOKEN`       | Cloudflare token with Pages edit/deploy permission for the selected account |
-| `STAGING_AUTH_TEST_PASSWORD` | Password for the dedicated test account                                     |
+### Secrets
 
-The configured web URL must exactly match `CORS_ORIGINS` on Render. Keep the Pages project URL on `pages.dev` for this phase; a final custom domain is out of scope.
+| Secret                          | Value/source                                                  |
+| ------------------------------- | ------------------------------------------------------------- |
+| `PRODUCTION_AUTH_TEST_PASSWORD` | Password for the dedicated production smoke-test account      |
+| `CLOUDFLARE_API_TOKEN`          | Token scoped to deploy the selected Pages project             |
+| `RENDER_API_KEY`                | Render API key with permission to deploy the existing service |
 
-**Environment `staging-migrations`** — because this repository is public, GitHub's required-reviewer protection for environments is available on GitHub Free. In **Settings → Environments → staging-migrations**, add the repository owner as a required reviewer and require approval before the migration job can access its secret. With only one person who can approve, do not enable the option that prevents the workflow initiator from approving their own run; otherwise the migration job can become impossible to approve. This provides an explicit second confirmation, not independent two-person review.
+Never commit values for these entries to the repository or send them in chat. The API's database connection configuration remains server-side in Render; this workflow must not receive a PostgreSQL connection string, a Supabase service-role key, or any other database credential.
 
-Add this secret:
+The only Supabase values passed to the frontend build are the public URL and anon key. The web bundle scan validates that only the allowlisted public Vite inputs and anon-role JWTs are present.
 
-| Secret                         | Meaning                                                    |
-| ------------------------------ | ---------------------------------------------------------- |
-| `STAGING_DATABASE_URL_MIGRATE` | PostgreSQL connection string for the staging database only |
+### Required approval protection
 
-Merely declaring an environment in YAML does not enable an approval gate. Verify the required-reviewer rule in GitHub Settings before using the workflow. Do not put the production connection string into this environment.
+In **Settings → Environments → production**, configure a required reviewer before using the publication workflow. GitHub does not create an approval gate merely because a job declares `environment: production`.
 
-### 3. Reconcile the existing Render API staging service
+Only the `publish` job references the protected environment, so validation does not ask for production credentials or create a second approval prompt. After the single publication approval, the job validates all 11 required configuration values and checks the pinned production destinations before making any provider API call. If the repository owner is the only person able to approve, do not enable the option that prevents the workflow initiator from approving their own run; otherwise publication can become impossible to approve. This is an explicit approval gate, not independent two-person review.
 
-The connected Render workspace already contains a service named `year95-api-staging` at `https://year95-api-staging.onrender.com` (service ID `srv-db4il4ad0e5s73cg78g0`). At the time this PR was prepared, its Render configuration still used the Node runtime, branch `feat/api-runtime-render`, automatic commit deploys, and no `/ready` health check. **Do not create a duplicate service and do not treat that existing service as compliant yet.**
+Use a dedicated production test account, not a real user's credentials. The account must already be able to authenticate and access the dashboard. The smoke test does not create users or change the database.
 
-After the PR is merged, open the existing service in Render and reconcile it with this repository's `render.yaml` through Render Blueprint sync. Confirm that the existing resource is updated rather than duplicated, and verify the result explicitly:
+Before enabling manual-only releases, also verify in the Cloudflare dashboard that Pages is not independently auto-publishing `main` through a provider-side Git integration. The GitHub workflow cannot turn off a separate Cloudflare deployment mechanism.
 
-- Runtime is Docker, using `apps/api/Dockerfile` with the repository root as Docker context.
-- Connected branch is `main`.
-- Automatic deploys are disabled (`autoDeployTrigger: off`).
-- Health check path is `/ready`.
-- Region remains Frankfurt and the existing public URL is retained.
-- Plan and any cost-affecting change are reviewed before applying the sync.
+## Manual release procedure
 
-If Render proposes creating a second service or cannot reconcile the existing service safely, stop and resolve that mismatch in the dashboard instead of applying it blindly.
+The workflow in `.github/workflows/deploy.yml` is manual-only. It must not be triggered by `push`, `pull_request`, or `workflow_run`.
 
-Provide the requested `sync: false` values in Render's dashboard. Set:
+1. Merge the reviewed release PR into `main` after its structural test and full CI both pass.
+2. Wait for the `.github/workflows/ci.yml` run for the resulting exact `main` commit to finish successfully.
+3. Open **Actions → Production deploy → Run workflow**, select `main`, and copy the full 40-character lowercase SHA currently at the head of `main` into `confirmed_sha`.
+4. Enter exactly `publish-production` in `confirm_production`.
+5. The `validate` job checks the confirmation, SHA format and equality, current `main` HEAD, the latest successful CI push run for that SHA, and the workflow's structural guard.
+6. After validation succeeds, approve the protected `production` environment when GitHub prompts for approval. The `publish` job then rechecks the SHA and CI, validates all required configuration values, and rechecks freshness again immediately before requesting the Render deploy.
+7. The workflow deploys the validated commit to Render, waits for Render status `live`, requires `GET /ready` to return HTTP 200 with `ready: true`, deploys `apps/web/dist` to Cloudflare Pages, and runs the browser smoke test.
 
-- `DATABASE_URL`: staging PostgreSQL connection string.
-- `SUPABASE_URL`: staging Supabase URL.
-- `SUPABASE_JWKS_URL`: `<STAGING_SUPABASE_URL>/auth/v1/.well-known/jwks.json`.
-- `SUPABASE_JWT_ISSUER`: `<STAGING_SUPABASE_URL>/auth/v1`.
-- `CORS_ORIGINS`: the exact `STAGING_WEB_URL` origin, with no trailing slash.
+Any missing value, incorrect destination, stale SHA, unsuccessful or missing CI run, failed deployment, or failed readiness check blocks subsequent steps. Do not bypass a gate or manually deploy an older SHA.
 
-The Blueprint also declares `DATABASE_CA_CERT_PEM` with `sync: false`. Fill it with the full certificate PEM only if the staging database requires a custom root CA; otherwise leave it empty. Keep the CA and database connection string server-side only.
+## Database and migration boundaries
 
-The public staging database must be migrated before API readiness can pass. After the workflow files are on `main`, run the manual migration workflow as described below, with approval, before relying on the first deployment.
+This release workflow never applies database migrations, changes the schema, or writes to the migration ledger. The API deployment does not run a migration command as part of container startup. No database URL secret may be referenced from `.github/workflows/deploy.yml`.
 
-### 4. Provision Cloudflare Pages
+The existing `.github/workflows/staging-migrations.yml` workflow remains unchanged and is outside this release path. Do not infer its database target from its filename or run it as part of a production deploy. Before any future migration, explicitly verify the environment's configured connection target, review the proposed additive migration, and obtain separate approval. Database baseline files `001–023` remain immutable; future migrations `024+` are forward-only and additive under the project contract.
 
-Create an empty Cloudflare Pages project using the value selected for `CLOUDFLARE_PAGES_PROJECT_NAME`. The workflow builds `apps/web` from the repository root and uploads `apps/web/dist` using Wrangler. The frontend receives only the three public Vite inputs:
+## Post-deploy smoke and recovery
 
-- `VITE_API_BASE_URL` = `STAGING_API_URL`
-- `VITE_SUPABASE_URL` = `STAGING_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY` = `STAGING_SUPABASE_ANON_KEY`
+The smoke script `scripts/deployment-smoke.mjs` verifies that the production login page is reachable, `GET /ready` returns HTTP 200 with `ready: true`, the dedicated test account can sign in, the dashboard health/readiness cards appear, and the authenticated `/v1/me` route returns HTTP 200. It does not print the test password or access token.
 
-Never provide `DATABASE_URL`, a service-role key, Render credentials, or any private key as a `VITE_*` value.
-
-## Manually applying staging migrations
-
-1. Confirm that the workflow has been merged to `main`. Copy the exact 40-character HEAD SHA shown for `main` in GitHub after reviewing that commit.
-2. Open **Actions → Staging database migrations → Run workflow**, select `main`, paste the SHA into `confirmed_sha`, enter the exact expected pending migration numbers (for a brand-new database, the current full set is `024,025,026,027,028,029`), and leave `dry_run` set to `true`. Enter `none` only if the staging database is already current.
-3. Approve the `staging-migrations` environment and confirm the dry-run summary reports a matching SHA, successful PostgreSQL connectivity, and the expected pending set. A dry-run only performs connection and read-only ledger checks; it does not apply migration SQL.
-4. Only after the dry-run passes, dispatch a **new run** with the same SHA and pending set, and explicitly set `dry_run` to `false` to apply migrations. The workflow rechecks that the SHA is still the current `main` HEAD; approve this run separately.
-5. A maintainer must configure required reviewers for the `staging-migrations` environment before using either mode. In a public repository, verify the setting in GitHub **Settings → Environments**; merely declaring `environment:` in YAML does not enable approval. The SHA confirmation is an additional guard, not a substitute for environment approval.
-6. The workflow validates forward-only migration files, checks the expected pending set read-only, runs the official repository migration runner only when `dry_run=false`, and verifies the migration ledger after an actual run. A mismatch fails closed before the runner starts. On failure, inspect the staging ledger before retrying.
-
-Do not run migrations from the deploy workflow or as part of the API container startup. The production migration workflow remains separate and unchanged.
-
-## Automated deployment and post-deploy smoke
-
-After a push to `main`, the existing `CI` workflow must conclude with `success`. Only then can `Deploy staging` run. It verifies the SHA is still current and queries GitHub for a closed, merged PR whose base is `main` and whose `merge_commit_sha` exactly equals the CI SHA. Use squash merge for this PR; a regular merge commit should also satisfy the exact-SHA check. Avoid rebase merge, which may produce an SHA that does not match and block deployment. A direct push fails this check even if CI passes; stale workflow runs are skipped rather than deploying older code.
-
-For the validated SHA, the workflow builds and secret-scans the web bundle, triggers the Render API deploy through the Render API, waits for Render's deploy status to become `live`, and requires `GET /ready` to return HTTP 200 with `ready: true`. It then deploys the web bundle to Cloudflare Pages and runs `scripts/staging-smoke.mjs` in Chromium.
-
-The post-deploy smoke requires the public web URL to reach the login form, a successful login using the dedicated staging test account, the dashboard health/readiness cards, and an authenticated `/v1/me` response with HTTP 200. It never prints the test password or access token.
-
-## Direct-push exceptions register
-
-The repository is public and the repository owner has confirmed that they are currently the only person with write access. That reduces the number of actors but does not prevent an accidental direct push or enforce review on `main`. A CODEOWNERS file alone does not block a merge or push.
-
-The free-plan deploy guard enforces a narrower guarantee: **a CI-green direct push still cannot deploy to staging**, because the exact commit must be the merge SHA of a closed, merged PR whose base is `main`. It does not stop a direct push from changing `main`, and it does not replace repository-level branch rules.
-
-If a direct push to `main` occurs, do not bypass the deploy guard or manually deploy that SHA. Record it here with the date, full SHA, reason, and follow-up action; then restore the normal reviewed-PR path. The guard's failed workflow run and step summary also provide an audit trail.
-
-| Date (UTC) | Direct-push SHA        | Reason and follow-up |
-| ---------- | ---------------------- | -------------------- |
-| —          | No exceptions recorded | —                    |
+Render and Cloudflare publication is sequential rather than transactional. If Render deployment succeeds but the Cloudflare publication or browser smoke test fails, stop and inspect the deployed versions before taking a separately reviewed recovery action. Do not use a database migration as an automatic recovery step.
 
 ## Costs and limits
 
-Cloudflare Pages has a free tier; Render's free service may spin down when idle, delaying readiness. The API readiness loop makes up to 40 requests, each with a 15-second request timeout and a 15-second delay between attempts. Its total duration can approach 20 minutes if every request times out (roughly 10 minutes when responses return quickly). The Render Blueprint uses the free plan for this minimal staging target. Confirm current plan limits and any account-specific billing terms in the providers' dashboards before provisioning. No final domain, worker, cron, WAF, or observability stack is included.
-
-## Cloudflare Pages GitHub status check
-
-Cloudflare Pages preview deployments are intentionally disabled for this project. As a result, GitHub push events for non-production branches can appear in Cloudflare's deployment list as skipped with reason `preview_deployments_disabled`. The associated “Cloudflare Pages” check may remain pending or appear non-successful even though no preview build is expected.
-
-Treat this check as **informational, not a merge gate**. Do not re-enable automatic preview or production deployments just to make the check green. Review the actual required GitHub Actions checks instead: CI (typecheck, lint, architecture, unit, contract, integration, build), API Docker, and Local Supabase Auth Smoke. The Pages status does not replace any of these tests.
-
-The Docker Hub login mitigates anonymous pull limits, but recent smoke logs still contain `toomanyrequests` responses even though `supabase start` and the browser smoke completed successfully. Do not treat the rate-limit warnings as resolved; if a future smoke fails on image pulls, investigate an image mirror or explicit cache rather than adding retries.
-
-The only valid publication is a successful run of the `Deploy staging` workflow in `.github/workflows/deploy.yml`. That workflow uploads `apps/web/dist` using Wrangler only after successful CI for the exact current main merge commit and after the staging API readiness gate. A green or skipped Cloudflare Pages Git check does not mean that anything was published. Consider the controlled deployment path operationally proven only after a complete successful `Deploy staging` run, including the Cloudflare upload and post-deploy browser smoke test.
+The current Render service reports the free plan. Free services can spin down while idle and delay readiness. The workflow waits up to 30 minutes for the Render deployment. API readiness retries run for about 10 minutes when responses return quickly and can take up to 20 minutes when each request reaches its 15-second timeout. Review provider dashboards for current limits and account-specific billing before changing service plans or enabling paid infrastructure.

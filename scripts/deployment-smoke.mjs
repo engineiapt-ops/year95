@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const WEB_URL = requiredHttpsOrigin('STAGING_WEB_URL');
-const API_URL = requiredHttpsOrigin('STAGING_API_URL');
-const TEST_EMAIL = requiredEnv('STAGING_AUTH_TEST_EMAIL');
-const TEST_PASSWORD = requiredEnv('STAGING_AUTH_TEST_PASSWORD');
+const WEB_URL = requiredHttpsOrigin('PRODUCTION_WEB_URL');
+const API_URL = requiredHttpsOrigin('PRODUCTION_API_URL');
+const TEST_EMAIL = requiredEnv('PRODUCTION_AUTH_TEST_EMAIL');
+const TEST_PASSWORD = requiredEnv('PRODUCTION_AUTH_TEST_PASSWORD');
 const PLAYWRIGHT_MODULE = requiredEnv('PLAYWRIGHT_MODULE');
 
 async function main() {
@@ -36,7 +36,7 @@ async function main() {
         const url = new URL(request.url());
         if (url.origin === API_URL) {
           console.error(
-            `Staging browser request failed: ${request.method()} ${url.pathname} (${request.failure()?.errorText ?? 'unknown'})`,
+            `Production browser request failed: ${request.method()} ${url.pathname} (${request.failure()?.errorText ?? 'unknown'})`,
           );
         }
       } catch {
@@ -56,12 +56,12 @@ async function main() {
 
     assert.ok(
       currentUserStatuses.includes(200),
-      'Dashboard must successfully call the staging API authenticated /v1/me route',
+      'Dashboard must successfully call the production API authenticated /v1/me route',
     );
 
-    console.log('PASS: public staging GET /ready reports ready=true');
+    console.log('PASS: production API /ready reports ready=true');
     console.log(
-      'PASS: public staging browser login reaches dashboard with live API and identity cards',
+      'PASS: production browser login reaches the dashboard with live API and identity cards',
     );
   } finally {
     await browser.close();
@@ -80,7 +80,7 @@ async function verifyWeb() {
     }
     await sleep(5_000);
   }
-  throw new Error('Staging web /login did not become reachable');
+  throw new Error('Production web /login did not become reachable');
 }
 
 async function verifyReadiness() {
@@ -88,12 +88,12 @@ async function verifyReadiness() {
   try {
     response = await fetch(`${API_URL}/ready`, { signal: AbortSignal.timeout(15_000) });
   } catch {
-    throw new Error('Staging API /ready could not be reached');
+    throw new Error('Production API /ready could not be reached');
   }
 
-  assert.equal(response.status, 200, 'Staging API /ready must return HTTP 200');
+  assert.equal(response.status, 200, 'Production API /ready must return HTTP 200');
   const body = await response.json();
-  assert.equal(body.ready, true, 'Staging API /ready must report ready=true');
+  assert.equal(body.ready, true, 'Production API /ready must report ready=true');
 }
 
 function requiredEnv(name) {
@@ -116,7 +116,7 @@ function requiredHttpsOrigin(name) {
 
 main().catch((error) => {
   console.error(
-    `STAGING SMOKE FAILED: ${error instanceof Error ? error.message : 'unknown error'}`,
+    `PRODUCTION SMOKE FAILED: ${error instanceof Error ? error.message : 'unknown error'}`,
   );
   process.exitCode = 1;
 });
