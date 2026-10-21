@@ -183,8 +183,9 @@ jobs:
             RENDER_API_KEY
           )
           for name in "${required[@]}"; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::error::Required production configuration is missing: $name"
+            value="${!name:-}"
+            if [[ -z "${value//[[:space:]]/}" ]]; then
+              echo "::error::Required production configuration is missing or whitespace-only: $name"
               exit 1
             fi
           done
