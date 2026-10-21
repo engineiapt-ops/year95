@@ -26,37 +26,12 @@ jobs:
     name: Validate reviewed production release
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: production
     outputs:
       confirmed_sha: ${{ steps.release.outputs.sha }}
     env:
       CONFIRMED_SHA: ${{ inputs.confirmed_sha }}
       CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
-      PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
-      PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
-      PRODUCTION_SUPABASE_URL: ${{ vars.PRODUCTION_SUPABASE_URL }}
-      PRODUCTION_SUPABASE_ANON_KEY: ${{ vars.PRODUCTION_SUPABASE_ANON_KEY }}
-      PRODUCTION_AUTH_TEST_EMAIL: ${{ vars.PRODUCTION_AUTH_TEST_EMAIL }}
-      CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
     steps:
-      - name: Mask production secrets before any other step
-        shell: bash
-        env:
-          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-        run: |
-          set -euo pipefail
-          for name in PRODUCTION_AUTH_TEST_PASSWORD CLOUDFLARE_API_TOKEN RENDER_API_KEY; do
-            value="${!name:-}"
-            if [[ -n "$value" ]]; then
-              printf '::add-mask::%s\n' "$value"
-            fi
-          done
-
       - name: Checkout the workflow-dispatch commit
         uses: actions/checkout@v4
         with:
@@ -264,13 +239,58 @@ jobs:
             fi
           done
 
+      - name: Gate 4 — validate production configuration before provider calls
+        shell: bash
+        env:
+          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          required=(
+            PRODUCTION_API_URL
+            PRODUCTION_WEB_URL
+            PRODUCTION_SUPABASE_URL
+            PRODUCTION_SUPABASE_ANON_KEY
+            PRODUCTION_AUTH_TEST_EMAIL
+            PRODUCTION_AUTH_TEST_PASSWORD
+            CLOUDFLARE_PAGES_PROJECT_NAME
+            CLOUDFLARE_ACCOUNT_ID
+            CLOUDFLARE_API_TOKEN
+            RENDER_SERVICE_ID
+            RENDER_API_KEY
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required production configuration is missing: $name"
+              exit 1
+            fi
+          done
+          if [[ "$PRODUCTION_API_URL" != "https://year95-api-staging.onrender.com" ||
+                "$PRODUCTION_WEB_URL" != "https://year95-web.pages.dev" ||
+                "$PRODUCTION_SUPABASE_URL" != "https://dhvigrzfjipshubcbuaa.supabase.co" ||
+                "$CLOUDFLARE_PAGES_PROJECT_NAME" != "year95-web" ||
+                "$RENDER_SERVICE_ID" != "srv-db4il4ad0e5s73cg78g0" ]]; then
+            echo "::error::Production destinations do not match the reviewed targets; publication is blocked."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID has an invalid format."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_PAGES_PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            echo "::error::CLOUDFLARE_PAGES_PROJECT_NAME has an invalid format."
+            exit 1
+          fi
+          echo "Production configuration confirmed; values withheld."
+
       - name: Checkout the confirmed production commit
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.confirmed_sha }}
           persist-credentials: false
 
-      - name: Gate 6 — recheck release freshness after production approval
+      - name: Gate 5 — recheck release freshness after production approval
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -316,43 +336,6 @@ jobs:
           fi
           echo "Release SHA and latest main CI revalidated after approval."
 
-      - name: Gate 7 — recheck production configuration before provider calls
-        shell: bash
-        env:
-          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-        run: |
-          set -euo pipefail
-          required=(
-            PRODUCTION_API_URL
-            PRODUCTION_WEB_URL
-            PRODUCTION_SUPABASE_URL
-            PRODUCTION_SUPABASE_ANON_KEY
-            PRODUCTION_AUTH_TEST_EMAIL
-            PRODUCTION_AUTH_TEST_PASSWORD
-            CLOUDFLARE_PAGES_PROJECT_NAME
-            CLOUDFLARE_ACCOUNT_ID
-            CLOUDFLARE_API_TOKEN
-            RENDER_SERVICE_ID
-            RENDER_API_KEY
-          )
-          for name in "${required[@]}"; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::error::Required production configuration is missing: $name"
-              exit 1
-            fi
-          done
-          if [[ "$PRODUCTION_API_URL" != "https://year95-api-staging.onrender.com" ||
-                "$PRODUCTION_WEB_URL" != "https://year95-web.pages.dev" ||
-                "$PRODUCTION_SUPABASE_URL" != "https://dhvigrzfjipshubcbuaa.supabase.co" ||
-                "$CLOUDFLARE_PAGES_PROJECT_NAME" != "year95-web" ||
-                "$RENDER_SERVICE_ID" != "srv-db4il4ad0e5s73cg78g0" ]]; then
-            echo "::error::Production destinations do not match the reviewed targets; publication is blocked."
-            exit 1
-          fi
-          echo "Production configuration confirmed; values withheld."
-
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -378,6 +361,52 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/playwright" --no-audit --no-fund playwright@1.55.0
           "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Final gate — recheck release SHA immediately before Render
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM_PRODUCTION" != "publish-production" || "$CONFIRMED_SHA" != "$WORKFLOW_SHA" ]]; then
+            echo "::error::Production confirmation or release SHA changed; publication is blocked."
+            exit 1
+          fi
+
+          main_response="$RUNNER_TEMP/current-main-before-publish.json"
+          main_http="$(curl --silent --show-error --output "$main_response" --write-out '%{http_code}' \
+            --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/main" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28')" || {
+              echo "::error::Could not recheck current main; publication is blocked."
+              exit 1
+            }
+          if [[ "$main_http" != "200" || "$(jq -r '.sha // empty' "$main_response")" != "$CONFIRMED_SHA" ]]; then
+            echo "::error::main changed after approval; review the latest commit and dispatch again."
+            exit 1
+          fi
+
+          ci_response="$RUNNER_TEMP/ci-workflow-runs-before-publish.json"
+          ci_http="$(curl --silent --show-error --output "$ci_response" --write-out '%{http_code}' \
+            --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$CONFIRMED_SHA&per_page=100" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28')" || {
+              echo "::error::Could not recheck CI; publication is blocked."
+              exit 1
+            }
+          if [[ "$ci_http" != "200" ]] || ! jq -e --arg sha "$CONFIRMED_SHA" '
+            [.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .head_branch == "main")] |
+            sort_by(.created_at) |
+            if length == 0 then false
+            else (.[-1].status == "completed" and .[-1].conclusion == "success")
+            end
+          ' "$ci_response" >/dev/null; then
+            echo "::error::The latest main push CI run is no longer successful; publication is blocked."
+            exit 1
+          fi
+          echo "Release SHA and latest main CI revalidated after approval."
 
       - name: Trigger Render deploy for the confirmed production commit
         id: render-deploy
