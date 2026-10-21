@@ -11,5 +11,6 @@ YEAR95 records material architecture decisions here.
 - [0005 — Sizing Semantics](0005-sizing-semantics.md) — Approved 2026-10-08
 - [0006 — Deterministic Decision (D1)](0006-deterministic-decision.md) — Added for R-005b
 - [0007 — Frozen Database Baseline (D6)](0007-frozen-db-baseline.md) — Added for R-005b
+- [0008 — Manual Production Publication](0008-manual-production-publication.md) — Accepted 2026-10-21
 
-The five Delivery 1 ADRs were reviewed and approved by the maintainer on 2026-10-08.
+The five Delivery 1 ADRs were reviewed and approved by the maintainer on 2026-10-08. ADR-0008 records the production publication decision accepted on 2026-10-21.
