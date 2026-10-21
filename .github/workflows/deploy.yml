@@ -28,6 +28,8 @@ jobs:
     timeout-minutes: 15
     environment:
       name: production
+    outputs:
+      confirmed_sha: ${{ steps.release.outputs.sha }}
     env:
       CONFIRMED_SHA: ${{ inputs.confirmed_sha }}
       CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
@@ -36,20 +38,24 @@ jobs:
       PRODUCTION_SUPABASE_URL: ${{ vars.PRODUCTION_SUPABASE_URL }}
       PRODUCTION_SUPABASE_ANON_KEY: ${{ vars.PRODUCTION_SUPABASE_ANON_KEY }}
       PRODUCTION_AUTH_TEST_EMAIL: ${{ vars.PRODUCTION_AUTH_TEST_EMAIL }}
-      PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
       CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
     steps:
       - name: Mask production secrets before any other step
         shell: bash
+        env:
+          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -euo pipefail
-          echo "::add-mask::$PRODUCTION_AUTH_TEST_PASSWORD"
-          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
-          echo "::add-mask::$RENDER_API_KEY"
+          for name in PRODUCTION_AUTH_TEST_PASSWORD CLOUDFLARE_API_TOKEN RENDER_API_KEY; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then
+              printf '::add-mask::%s\n' "$value"
+            fi
+          done
 
       - name: Checkout the workflow-dispatch commit
         uses: actions/checkout@v4
@@ -105,14 +111,18 @@ jobs:
           fi
           echo "Confirmed SHA matches workflow_dispatch and current main."
 
-      - name: Gate 3 — require the latest CI run for ci.yml and this SHA to be successful
+      - name: Gate 3 — require the latest main push CI run for this SHA to succeed
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           response="$RUNNER_TEMP/ci-workflow-runs.json"
-          http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}'             --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$CONFIRMED_SHA&per_page=100"             --header "Authorization: Bearer $GH_TOKEN"             --header 'Accept: application/vnd.github+json'             --header 'X-GitHub-Api-Version: 2022-11-28')" || {
+          http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+            --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$CONFIRMED_SHA&per_page=100" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28')" || {
               echo "::error::Could not query CI workflow runs; production publication is blocked."
               exit 1
             }
@@ -121,19 +131,23 @@ jobs:
             exit 1
           fi
           if ! jq -e --arg sha "$CONFIRMED_SHA" '
-            [.workflow_runs[] | select(.head_sha == $sha)] |
+            [.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .head_branch == "main")] |
             sort_by(.created_at) |
             if length == 0 then false
             else (.[-1].status == "completed" and .[-1].conclusion == "success")
             end
           ' "$response" >/dev/null; then
-            echo "::error::The latest run of .github/workflows/ci.yml for the confirmed SHA is not completed successfully."
+            echo "::error::The latest main push run of .github/workflows/ci.yml for this SHA is not successful."
             exit 1
           fi
-          echo "Latest run of the exact ci.yml workflow for the confirmed SHA completed successfully."
+          echo "Latest main push run of ci.yml for the confirmed SHA completed successfully."
 
       - name: Gate 4 — require all 11 production variables and secrets
         shell: bash
+        env:
+          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           set -euo pipefail
           required=(
@@ -155,9 +169,6 @@ jobs:
               exit 1
             fi
           done
-          echo "::add-mask::$PRODUCTION_AUTH_TEST_PASSWORD"
-          echo "::add-mask::$CLOUDFLARE_API_TOKEN"
-          echo "::add-mask::$RENDER_API_KEY"
           echo "All required production configuration values are present; values withheld."
 
       - name: Gate 5 — validate exact production destinations and origins
@@ -170,7 +181,7 @@ jobs:
           fi
           node --input-type=module <<'NODE'
           const expected = {
-            // Historical naming only: this existing Render service is the production API target.
+            // Historical name only: this existing Render service is the production API target.
             PRODUCTION_API_URL: 'https://year95-api-staging.onrender.com',
             PRODUCTION_SUPABASE_URL: 'https://dhvigrzfjipshubcbuaa.supabase.co',
             CLOUDFLARE_PAGES_PROJECT_NAME: 'year95-web',
@@ -211,3 +222,252 @@ jobs:
 
       - name: Structural test — manual-only workflow and secret boundaries
         run: ruby scripts/test-production-deploy-workflow.rb
+
+      - name: Export validated release SHA
+        id: release
+        shell: bash
+        run: echo "sha=$CONFIRMED_SHA" >> "$GITHUB_OUTPUT"
+
+  publish:
+    if: github.ref == 'refs/heads/main' && needs.validate.result == 'success'
+    needs: validate
+    name: Publish the confirmed production release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+    env:
+      CONFIRMED_SHA: ${{ needs.validate.outputs.confirmed_sha }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+      PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+      PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+      PRODUCTION_SUPABASE_URL: ${{ vars.PRODUCTION_SUPABASE_URL }}
+      PRODUCTION_SUPABASE_ANON_KEY: ${{ vars.PRODUCTION_SUPABASE_ANON_KEY }}
+      PRODUCTION_AUTH_TEST_EMAIL: ${{ vars.PRODUCTION_AUTH_TEST_EMAIL }}
+      CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+    steps:
+      - name: Mask production secrets before any other step
+        shell: bash
+        env:
+          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          for name in PRODUCTION_AUTH_TEST_PASSWORD CLOUDFLARE_API_TOKEN RENDER_API_KEY; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then
+              printf '::add-mask::%s\n' "$value"
+            fi
+          done
+
+      - name: Checkout the confirmed production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.confirmed_sha }}
+          persist-credentials: false
+
+      - name: Gate 6 — recheck release freshness after production approval
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM_PRODUCTION" != "publish-production" || "$CONFIRMED_SHA" != "$WORKFLOW_SHA" ]]; then
+            echo "::error::Production confirmation or release SHA changed; publication is blocked."
+            exit 1
+          fi
+
+          main_response="$RUNNER_TEMP/current-main-before-publish.json"
+          main_http="$(curl --silent --show-error --output "$main_response" --write-out '%{http_code}' \
+            --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/main" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28')" || {
+              echo "::error::Could not recheck current main; publication is blocked."
+              exit 1
+            }
+          if [[ "$main_http" != "200" || "$(jq -r '.sha // empty' "$main_response")" != "$CONFIRMED_SHA" ]]; then
+            echo "::error::main changed after approval; review the latest commit and dispatch again."
+            exit 1
+          fi
+
+          ci_response="$RUNNER_TEMP/ci-workflow-runs-before-publish.json"
+          ci_http="$(curl --silent --show-error --output "$ci_response" --write-out '%{http_code}' \
+            --request GET "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$CONFIRMED_SHA&per_page=100" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28')" || {
+              echo "::error::Could not recheck CI; publication is blocked."
+              exit 1
+            }
+          if [[ "$ci_http" != "200" ]] || ! jq -e --arg sha "$CONFIRMED_SHA" '
+            [.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .head_branch == "main")] |
+            sort_by(.created_at) |
+            if length == 0 then false
+            else (.[-1].status == "completed" and .[-1].conclusion == "success")
+            end
+          ' "$ci_response" >/dev/null; then
+            echo "::error::The latest main push CI run is no longer successful; publication is blocked."
+            exit 1
+          fi
+          echo "Release SHA and latest main CI revalidated after approval."
+
+      - name: Gate 7 — recheck production configuration before provider calls
+        shell: bash
+        env:
+          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          required=(
+            PRODUCTION_API_URL
+            PRODUCTION_WEB_URL
+            PRODUCTION_SUPABASE_URL
+            PRODUCTION_SUPABASE_ANON_KEY
+            PRODUCTION_AUTH_TEST_EMAIL
+            PRODUCTION_AUTH_TEST_PASSWORD
+            CLOUDFLARE_PAGES_PROJECT_NAME
+            CLOUDFLARE_ACCOUNT_ID
+            CLOUDFLARE_API_TOKEN
+            RENDER_SERVICE_ID
+            RENDER_API_KEY
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required production configuration is missing: $name"
+              exit 1
+            fi
+          done
+          if [[ "$PRODUCTION_API_URL" != "https://year95-api-staging.onrender.com" ||
+                "$PRODUCTION_WEB_URL" != "https://year95-web.pages.dev" ||
+                "$PRODUCTION_SUPABASE_URL" != "https://dhvigrzfjipshubcbuaa.supabase.co" ||
+                "$CLOUDFLARE_PAGES_PROJECT_NAME" != "year95-web" ||
+                "$RENDER_SERVICE_ID" != "srv-db4il4ad0e5s73cg78g0" ]]; then
+            echo "::error::Production destinations do not match the reviewed targets; publication is blocked."
+            exit 1
+          fi
+          echo "Production configuration confirmed; values withheld."
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the production web bundle
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.PRODUCTION_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.PRODUCTION_SUPABASE_ANON_KEY }}
+        run: pnpm --filter @year95/web build
+
+      - name: Install pinned Playwright and Chromium for smoke tests
+        run: |
+          npm install --prefix "$RUNNER_TEMP/playwright" --no-audit --no-fund playwright@1.55.0
+          "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Trigger Render deploy for the confirmed production commit
+        id: render-deploy
+        shell: bash
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/render-deploy-response.json"
+          http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+            --request POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            --header "Authorization: Bearer $RENDER_API_KEY" \
+            --header 'Accept: application/json' \
+            --header 'Content-Type: application/json' \
+            --data "{\"commitId\":\"$CONFIRMED_SHA\",\"clearCache\":\"do_not_clear\"}")" || {
+              echo "::error::Render deploy request failed; response body withheld."
+              exit 1
+            }
+          if [[ "$http_code" != "201" ]]; then
+            echo "::error::Render did not accept the deploy request (HTTP $http_code); response body withheld."
+            exit 1
+          fi
+          deploy_id="$(jq -r '.id // empty' "$response")"
+          if [[ -z "$deploy_id" ]]; then
+            echo "::error::Render accepted a response without a deployment ID."
+            exit 1
+          fi
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+          echo "Render accepted deployment for the confirmed commit."
+
+      - name: Wait for Render deployment to become live
+        shell: bash
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DEPLOY_ID: ${{ steps.render-deploy.outputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            response="$RUNNER_TEMP/render-deploy-status.json"
+            http_code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+              --request GET "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys/$RENDER_DEPLOY_ID" \
+              --header "Authorization: Bearer $RENDER_API_KEY" \
+              --header 'Accept: application/json')" || http_code="000"
+            if [[ "$http_code" == "200" ]]; then
+              status="$(jq -r '.status // "unknown"' "$response")"
+              if [[ "$status" == "live" ]]; then
+                echo "Render deployment reached live status."
+                exit 0
+              fi
+              case "$status" in
+                build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                  echo "::error::Render deployment ended in terminal state '$status'. Response details withheld."
+                  exit 1
+                  ;;
+              esac
+            fi
+            sleep 20
+          done
+          echo "::error::Timed out waiting for Render deployment to become live."
+          exit 1
+
+      - name: Wait for production API readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            body="$RUNNER_TEMP/production-ready.json"
+            status="$(curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+              --max-time 15 "${PRODUCTION_API_URL%/}/ready" 2>/dev/null || true)"
+            if [[ "$status" == "200" ]] && jq -e '.ready == true' "$body" >/dev/null 2>&1; then
+              echo "Production API /ready reports ready=true."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Production API did not become ready within the allotted time."
+          exit 1
+
+      - name: Deploy production web bundle to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }} --branch=main
+
+      - name: Run production readiness and browser login smoke test
+        env:
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+          PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+          PRODUCTION_AUTH_TEST_EMAIL: ${{ vars.PRODUCTION_AUTH_TEST_EMAIL }}
+          PRODUCTION_AUTH_TEST_PASSWORD: ${{ secrets.PRODUCTION_AUTH_TEST_PASSWORD }}
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/playwright/node_modules/playwright/index.mjs
+        run: node scripts/deployment-smoke.mjs
