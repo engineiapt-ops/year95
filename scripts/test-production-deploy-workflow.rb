@@ -53,6 +53,10 @@ abort "publish must include the Cloudflare Pages deployment step." unless
 abort "publish must run production smoke tests after deployment." unless
   smoke_index && cloudflare_index && cloudflare_index < smoke_index
 
+smoke_step = publish_steps.find { |step| step["name"] == "Run production readiness and browser login smoke test" }
+abort "Production smoke test script is missing." unless
+  File.file?("scripts/deployment-smoke.mjs") && smoke_step&.fetch("run", nil) == "node scripts/deployment-smoke.mjs"
+
 abort "Staging-specific configuration must not remain in the production workflow." if
   source.match?(/STAGING_[A-Z0-9_]+/)
 abort "Automatic workflow triggers are forbidden." if
