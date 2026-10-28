@@ -54,7 +54,7 @@ export function assertValidatedMarketDataSnapshot(
       throw new Error('Open candles cannot be used for quantitative decisions');
     }
   }
-  return snapshot as ValidatedMarketDataSnapshot;
+  return { ...snapshot, [validatedSnapshotBrand]: true };
 }
 
 /**
