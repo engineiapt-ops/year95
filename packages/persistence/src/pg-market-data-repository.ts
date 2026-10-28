@@ -1,3 +1,4 @@
+import type { MarketDataSourceValidator } from '@year95/market-data';
 import type { PgQueryable } from './pg-pool.js';
 
 export const PERSISTABLE_MARKET_TIMEFRAMES = ['1h', '4h', '1d'] as const;
@@ -28,6 +29,7 @@ export interface StoredMarketCandle extends ClosedMarketCandle {
 
 export interface QueryClosedCandlesInput {
   readonly symbol: string;
+  readonly provider: string;
   readonly timeframe: PersistableMarketTimeframe;
   readonly limit?: number;
   readonly startTime?: Date;
@@ -114,6 +116,7 @@ function mapStoredCandle(row: MarketCandleRow): StoredMarketCandle {
 export class PgMarketDataRepository {
   constructor(
     private readonly db: PgQueryable,
+    private readonly sourceValidator: MarketDataSourceValidator,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -124,6 +127,7 @@ export class PgMarketDataRepository {
     const provider = input.provider.trim();
     if (!provider || provider.length > 100)
       throw new Error('provider must contain 1..100 characters');
+    this.sourceValidator.assertValidated(provider, symbol);
     const nowMs = timestamp(this.now(), 'clock');
     const seenOpenTimes = new Set<number>();
 
@@ -180,8 +184,18 @@ export class PgMarketDataRepository {
       throw new Error('startTime must not be greater than endTime');
     }
 
-    const values: unknown[] = [input.symbol.trim().toUpperCase(), input.timeframe];
-    const conditions = ['ativo = $1', 'timeframe = $2', 'close_time IS NOT NULL'];
+    const symbol = input.symbol.trim().toUpperCase();
+    const provider = input.provider.trim();
+    if (!provider || provider.length > 100)
+      throw new Error('provider must contain 1..100 characters');
+    this.sourceValidator.assertValidated(provider, symbol);
+    const values: unknown[] = [symbol, input.timeframe, provider];
+    const conditions = [
+      'ativo = $1',
+      'timeframe = $2',
+      'data_provider = $3',
+      'close_time IS NOT NULL',
+    ];
     if (startTime !== undefined) {
       values.push(new Date(startTime).toISOString());
       conditions.push('open_time >= $' + values.length);
