@@ -79,7 +79,8 @@ function validateCandle(candle: ClosedMarketCandle, nowMs: number): void {
     low: candle.low,
     close: candle.close,
   })) {
-    if (!Number.isFinite(value) || value <= 0) throw new Error(field + ' must be finite and positive');
+    if (!Number.isFinite(value) || value <= 0)
+      throw new Error(field + ' must be finite and positive');
   }
   if (!Number.isFinite(candle.volume) || candle.volume < 0) {
     throw new Error('volume must be finite and non-negative');
@@ -121,7 +122,8 @@ export class PgMarketDataRepository {
     assertTimeframe(input.timeframe);
     const symbol = input.symbol.trim().toUpperCase();
     const provider = input.provider.trim();
-    if (!provider || provider.length > 100) throw new Error('provider must contain 1..100 characters');
+    if (!provider || provider.length > 100)
+      throw new Error('provider must contain 1..100 characters');
     const nowMs = timestamp(this.now(), 'clock');
     const seenOpenTimes = new Set<number>();
 
@@ -171,7 +173,8 @@ export class PgMarketDataRepository {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_QUERY_LIMIT) {
       throw new Error('limit must be an integer between 1 and 1000');
     }
-    const startTime = input.startTime === undefined ? undefined : timestamp(input.startTime, 'startTime');
+    const startTime =
+      input.startTime === undefined ? undefined : timestamp(input.startTime, 'startTime');
     const endTime = input.endTime === undefined ? undefined : timestamp(input.endTime, 'endTime');
     if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
       throw new Error('startTime must not be greater than endTime');
