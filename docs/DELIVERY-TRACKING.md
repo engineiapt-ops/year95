@@ -27,6 +27,7 @@ GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Sta
 **Out of scope:** HTTP endpoints, scheduling/background workers, signals, quantitative decisions, strategies, indicators, backtesting, and order execution.
 
 **Acceptance criteria:**
+
 - Forward-only additive migration `030_market_data_closed_candles.sql`; immutable `db/baseline/001–023`.
 - Historical rows are preserved and are not assigned guessed close times or providers.
 - Invalid, future-closing, duplicate, unsupported-symbol, or unsupported-timeframe candles fail closed before database writes.
