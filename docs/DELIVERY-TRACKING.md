@@ -18,19 +18,32 @@ GitHub delivery: [PR #36](https://github.com/engineiapt-ops/year95/pull/36). Cod
 
 ### Binance Spot market-data adapter
 
-GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Status: merged. This is a public BTCUSDT candle adapter only; market-data HTTP routes, candle persistence and decision workflow were explicitly outside its scope. No internal R identifier is assigned here because an approved brief mapping it to an R item was not found.
+GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Status: merged. This is a public BTCUSDT candle adapter only; market-data HTTP routes, candle persistence and decision workflow were explicitly outside its scope.
+
+## R-009 — Closed-candle persistence and retrieval
+
+**Approved scope:** connect the existing provider-neutral market-candle contract to PostgreSQL persistence for verified BTCUSDT candles on `1h`, `4h`, and `1d` only. Persist only validated, closed candles; support idempotent writes and chronological reads of rows with known close timestamps. Keep legacy Portuguese column names inside the persistence adapter.
+
+**Out of scope:** HTTP endpoints, scheduling/background workers, signals, quantitative decisions, strategies, indicators, backtesting, and order execution.
+
+**Acceptance criteria:**
+- Forward-only additive migration `030_market_data_closed_candles.sql`; immutable `db/baseline/001–023`.
+- Historical rows are preserved and are not assigned guessed close times or providers.
+- Invalid, future-closing, duplicate, unsupported-symbol, or unsupported-timeframe candles fail closed before database writes.
+- SQL values are parameterized; read limits are bounded; queries exclude rows with unknown close times.
+- Unit tests cover validation, idempotent SQL shape, and retrieval mapping; CI must pass before merge.
+- No production database migration is run by this PR.
+
+GitHub delivery: implementation PR opened from this brief; acceptance is pending CI and review.
 
 ## Identifier correction
 
 The approved work-item brief provided for the web shell is titled `PR #008 — Web shell`; it was delivered by GitHub PR #36. The former `(#008)` suffix on GitHub PR #34's title was ambiguous and has been removed. The GitHub PR numbers themselves remain historical, permanent identifiers.
 
-Do not renumber merged commits or infer an internal R identifier from a GitHub PR title. When another approved work item is supplied, record its exact internal identifier, scope, legacy references, and acceptance criteria here in the same PR that implements or establishes that work.
-
 ## Advancement gate
 
 - R-008 (web shell) is accepted: issue #37 is closed after successful real-auth evidence on PR #40. The disposable local Supabase flow verified sign-in, API JWT verification, dashboard health/readiness and authenticated `/v1/me`, session-expiry handling, logout, and browser secret safety.
 - Validation on PR #40 head `80db5ff9918ec4dff73037685e2751a5d827851e`: [CI](https://github.com/engineiapt-ops/year95/actions/runs/38648343189), [Local Supabase Auth Smoke](https://github.com/engineiapt-ops/year95/actions/runs/38648343217), and [API Docker](https://github.com/engineiapt-ops/year95/actions/runs/38648343167) all passed.
-- The repository does not currently contain an approved specification for R-009. Do not start implementation under that identifier based on guesswork. Once the R-008 smoke test is complete, obtain and register the approved R-009 brief before opening its implementation PR.
 
 ## Safety
 

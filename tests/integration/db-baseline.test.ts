@@ -29,12 +29,16 @@ const plan = await loadMigrationPlan(rootDir);
 const indexCorrectionMigration = plan.migrations.find(
   ({ record }) => record.name === '028_reconcile_historical_indexes.sql',
 );
-if (!indexCorrectionMigration) {
-  throw new Error('Canonical index correction migration 028 is missing');
+const closedCandleMigration = plan.migrations.find(
+  ({ record }) => record.name === '030_market_data_closed_candles.sql',
+);
+if (!indexCorrectionMigration || !closedCandleMigration) {
+  throw new Error('Canonical index correction or closed-candle migration is missing');
 }
 const canonicalSchemaStatements: SqlStatement[] = [
   { sql: schemaSql },
   { sql: indexCorrectionMigration.sql },
+  { sql: closedCandleMigration.sql },
 ];
 const integrationTest = test.skipIf(!connectionString);
 

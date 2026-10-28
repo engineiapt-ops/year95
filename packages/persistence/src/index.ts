@@ -32,3 +32,14 @@ export {
   PgHealthRepository,
   PgInstrumentRepository,
 } from './pg-repositories.js';
+export {
+  PgMarketDataRepository,
+  PERSISTABLE_MARKET_TIMEFRAMES,
+} from './pg-market-data-repository.js';
+export type {
+  ClosedMarketCandle,
+  PersistClosedCandlesInput,
+  PersistableMarketTimeframe,
+  QueryClosedCandlesInput,
+  StoredMarketCandle,
+} from './pg-market-data-repository.js';
