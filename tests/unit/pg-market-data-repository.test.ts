@@ -113,7 +113,7 @@ describe('PgMarketDataRepository', () => {
         data_provider: 'binance-spot',
       },
     ]);
-    const repository = new PgMarketDataRepository(db, () => now);
+    const repository = new PgMarketDataRepository(db, validatedSources, () => now);
     const result = await repository.queryClosedCandles({
       symbol: 'BTCUSDT',
       provider: 'binance-spot',
@@ -144,6 +144,7 @@ describe('PgMarketDataRepository', () => {
     await expect(
       repository.queryClosedCandles({
         symbol: 'BTCUSDT',
+        provider: 'binance-spot',
         timeframe: '1h',
         limit: 1001,
       }),
@@ -151,6 +152,7 @@ describe('PgMarketDataRepository', () => {
     await expect(
       repository.queryClosedCandles({
         symbol: 'BTCUSDT',
+        provider: 'binance-spot',
         timeframe: '1h',
         startTime: new Date('2026-10-28T11:00:00.000Z'),
         endTime: new Date('2026-10-28T10:00:00.000Z'),
