@@ -45,6 +45,12 @@ async function main() {
   if (!indexCorrectionMigration) {
     throw new Error('Canonical index correction migration 028 is missing');
   }
+  const closedCandleMigration = plan.migrations.find(
+    ({ record }) => record.name === '030_market_data_closed_candles.sql',
+  );
+  if (!closedCandleMigration) {
+    throw new Error('Canonical closed-candle migration 030 is missing');
+  }
   const identityTablesMigration = plan.migrations.find(
     ({ record }) => record.name === '027_add_identity_repository_tables.sql',
   );
@@ -99,6 +105,7 @@ async function main() {
     await reference.transaction([
       { sql: plan.baselineSchemaSql },
       { sql: indexCorrectionMigration.sql },
+      { sql: closedCandleMigration.sql },
     ]);
     await runMigrations(baseline, { plan });
     // Apply only migration 027 in its own disposable schema: later migrations
@@ -116,7 +123,7 @@ async function main() {
       [referenceSchema],
     );
     const report = {
-      source: 'db/baseline/schema.sql + 028_reconcile_historical_indexes.sql',
+      source: 'db/baseline/schema.sql + 028_reconcile_historical_indexes.sql + 030_market_data_closed_candles.sql',
       schemaSqlSha256: plan.baselineRecords.find((record) => record.name === 'schema.sql')
         ?.checksum,
       baselineMigrationCount: plan.baselineRecords.filter(({ name }) => /^\d{3}_/.test(name))
