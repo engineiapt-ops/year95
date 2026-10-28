@@ -47,7 +47,7 @@ describe('forward-only migration metadata', () => {
       expect(record.checksum).toMatch(/^[a-f0-9]{64}$/);
     });
   });
-  test('loads additive migrations 024-029 with migration origin', async () => {
+  test('loads additive migrations 024-030 with migration origin', async () => {
     const plan = await loadMigrationPlan(rootDir);
     expect(plan.migrations.map(({ record }) => record.name)).toEqual([
       '024_add_instruments.sql',
@@ -56,6 +56,7 @@ describe('forward-only migration metadata', () => {
       '027_add_identity_repository_tables.sql',
       '028_reconcile_historical_indexes.sql',
       '029_benchmark_results_estrategia_widen.sql',
+      '030_market_data_closed_candles.sql',
     ]);
     expect(plan.migrations[0]?.record.origin).toBe('migration');
     expect(plan.migrations[0]?.sql).toContain('CREATE TABLE IF NOT EXISTS instruments');
