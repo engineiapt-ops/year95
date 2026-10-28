@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MarketDataSourceRegistry } from '../../packages/market-data/src/provider-validation.js';
+import {
+  MarketDataSourceRegistry,
+  assertValidatedMarketDataSnapshot,
+} from '../../packages/market-data/src/provider-validation.js';
 
 describe('MarketDataSourceRegistry', () => {
   it('accepts only an explicitly validated provider/instrument pair', () => {
@@ -40,5 +43,40 @@ describe('MarketDataSourceRegistry', () => {
     expect(() => registry.assertValidated('', 'BTCUSDT')).toThrow(
       'Market-data provider and symbol are required',
     );
+  });
+});
+
+
+describe('assertValidatedMarketDataSnapshot', () => {
+  const validator = new MarketDataSourceRegistry([
+    { providerId: 'binance-spot', symbol: 'BTCUSDT', status: 'validated' },
+  ]);
+  const snapshot = {
+    provider: 'binance-spot',
+    symbol: 'BTCUSDT',
+    candles: [{
+      openTime: new Date('2026-10-28T10:00:00.000Z'),
+      closeTime: new Date('2026-10-28T10:59:59.999Z'),
+    }],
+    freshness: { status: 'fresh' as const, checkedAt: '2026-10-28T12:00:00.000Z' },
+  };
+
+  it('returns a validated snapshot only for an approved, fresh source with closed candles', () => {
+    expect(assertValidatedMarketDataSnapshot(snapshot, validator)).toMatchObject(snapshot);
+  });
+
+  it('rejects unapproved sources, stale data, open candles, and empty candle sets', () => {
+    expect(() => assertValidatedMarketDataSnapshot(
+      { ...snapshot, provider: 'unknown-provider' }, validator,
+    )).toThrow('Market-data source is not validated');
+    expect(() => assertValidatedMarketDataSnapshot(
+      { ...snapshot, freshness: { ...snapshot.freshness, status: 'stale' } }, validator,
+    )).toThrow('Stale market data');
+    expect(() => assertValidatedMarketDataSnapshot(
+      { ...snapshot, candles: [{ ...snapshot.candles[0]!, closeTime: new Date('2026-10-28T12:00:01.000Z') }] },
+      validator,
+    )).toThrow('Open candles');
+    expect(() => assertValidatedMarketDataSnapshot({ ...snapshot, candles: [] }, validator))
+      .toThrow('at least one closed candle');
   });
 });
