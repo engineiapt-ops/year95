@@ -22,15 +22,16 @@ GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Sta
 
 ## R-009 — Closed-candle persistence and retrieval
 
-**Approved scope:** connect the existing provider-neutral market-candle contract to PostgreSQL persistence for verified BTCUSDT candles on `1h`, `4h`, and `1d` only. Persist only validated, closed candles; support idempotent writes and chronological reads of rows with known close timestamps. Keep legacy Portuguese column names inside the persistence adapter.
+**Approved scope:** connect the existing provider-neutral market-candle contract to PostgreSQL persistence for verified BTCUSDT candles on `1h`, `4h`, and `1d` only. Persist only validated, closed candles; require an explicit validated provider/instrument approval from the shared market-data contract before writes and reads; support idempotent writes and chronological reads scoped to the approved provider. Keep legacy Portuguese column names inside the persistence adapter.
 
-**Out of scope:** HTTP endpoints, scheduling/background workers, signals, quantitative decisions, strategies, indicators, backtesting, and order execution.
+**Out of scope:** HTTP endpoints, scheduling/background workers, decision-workflow integration, strategies, indicators, backtesting, and order execution. The shared validation contract must be required by any future quantitative decision entrypoint; no decision workflow currently exists to wire in this PR.
 
 **Acceptance criteria:**
 
 - Forward-only additive migration `030_market_data_closed_candles.sql`; immutable `db/baseline/001–023`.
 - Historical rows are preserved and are not assigned guessed close times or providers.
-- Invalid, future-closing, duplicate, unsupported-symbol, or unsupported-timeframe candles fail closed before database writes.
+- Invalid, future-closing, duplicate, unsupported-symbol, unsupported-timeframe, unregistered-provider, disabled-provider, or unvalidated provider/instrument pairs fail closed before database access.
+- Reads are scoped to the explicitly requested validated provider; provider-neutral persistence contains no provider-specific implementation.
 - SQL values are parameterized; read limits are bounded; queries exclude rows with unknown close times.
 - Unit tests cover validation, idempotent SQL shape, and retrieval mapping; CI must pass before merge.
 - No production database migration is run by this PR.
