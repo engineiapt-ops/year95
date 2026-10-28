@@ -135,7 +135,10 @@ describe('PgMarketDataRepository', () => {
       'data_provider = $3',
     );
     expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]).toEqual([
-      'BTCUSDT', '1h', 'binance-spot', 1,
+      'BTCUSDT',
+      '1h',
+      'binance-spot',
+      1,
     ]);
   });
 
