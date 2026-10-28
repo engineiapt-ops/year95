@@ -123,7 +123,8 @@ async function main() {
       [referenceSchema],
     );
     const report = {
-      source: 'db/baseline/schema.sql + 028_reconcile_historical_indexes.sql + 030_market_data_closed_candles.sql',
+      source:
+        'db/baseline/schema.sql + 028_reconcile_historical_indexes.sql + 030_market_data_closed_candles.sql',
       schemaSqlSha256: plan.baselineRecords.find((record) => record.name === 'schema.sql')
         ?.checksum,
       baselineMigrationCount: plan.baselineRecords.filter(({ name }) => /^\d{3}_/.test(name))
