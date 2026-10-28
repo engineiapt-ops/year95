@@ -18,8 +18,8 @@
     "@types/pg": "8.15.5"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @year95/market-data build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @year95/market-data build && tsc -p tsconfig.json",
     "migrate": "pnpm --filter @year95/contracts build && pnpm build && node ../../tools/db-migrate.mjs"
   }
 }
