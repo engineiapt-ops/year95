@@ -9,6 +9,54 @@ export interface MarketDataSourceValidator {
   assertValidated(providerId: string, symbol: string): void;
 }
 
+export interface MarketDataSnapshotCandidate {
+  readonly provider: string;
+  readonly symbol: string;
+  readonly candles: readonly {
+    readonly openTime: Date;
+    readonly closeTime: Date;
+  }[];
+  readonly freshness: {
+    readonly status: 'fresh' | 'stale';
+    readonly checkedAt: string;
+  };
+}
+
+const validatedSnapshotBrand: unique symbol = Symbol('validated-market-data-snapshot');
+
+/** Snapshot that passed provider, mapping, freshness, and closed-candle checks. */
+export interface ValidatedMarketDataSnapshot extends MarketDataSnapshotCandidate {
+  readonly [validatedSnapshotBrand]: true;
+}
+
+export function assertValidatedMarketDataSnapshot(
+  snapshot: MarketDataSnapshotCandidate,
+  validator: MarketDataSourceValidator,
+): ValidatedMarketDataSnapshot {
+  validator.assertValidated(snapshot.provider, snapshot.symbol);
+  if (snapshot.freshness.status !== 'fresh') {
+    throw new Error('Stale market data cannot be used for quantitative decisions');
+  }
+  const checkedAtMs = Date.parse(snapshot.freshness.checkedAt);
+  if (!Number.isFinite(checkedAtMs)) {
+    throw new Error('Market-data checkedAt must be a valid timestamp');
+  }
+  if (snapshot.candles.length === 0) {
+    throw new Error('Quantitative decisions require at least one closed candle');
+  }
+  for (const candle of snapshot.candles) {
+    const openTimeMs = candle.openTime.getTime();
+    const closeTimeMs = candle.closeTime.getTime();
+    if (!Number.isFinite(openTimeMs) || !Number.isFinite(closeTimeMs) || closeTimeMs < openTimeMs) {
+      throw new Error('Market-data snapshot contains invalid candle timestamps');
+    }
+    if (closeTimeMs > checkedAtMs) {
+      throw new Error('Open candles cannot be used for quantitative decisions');
+    }
+  }
+  return snapshot as ValidatedMarketDataSnapshot;
+}
+
 /**
  * Explicit allowlist for provider/instrument pairs. Registration alone is not
  * approval; only entries marked validated can pass. No source is trusted by default.
