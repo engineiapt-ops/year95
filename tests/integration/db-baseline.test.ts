@@ -195,6 +195,7 @@ integrationTest(
         { name: '027_add_identity_repository_tables.sql', origin: 'migration' },
         { name: '028_reconcile_historical_indexes.sql', origin: 'migration' },
         { name: '029_benchmark_results_estrategia_widen.sql', origin: 'migration' },
+        { name: '030_market_data_closed_candles.sql', origin: 'migration' },
       ]);
       expect(applied.map((row) => row.name)).toContain('schema.sql');
 
