@@ -22,16 +22,20 @@ describe('MarketDataSourceRegistry', () => {
     expect(() => disabled.assertValidated('saxo-sim', 'BTCUSDT')).toThrow(
       'Market-data source is not validated',
     );
-    expect(() => new MarketDataSourceRegistry([
-      { providerId: 'binance-spot', symbol: 'BTCUSDT', status: 'validated' },
-      { providerId: 'binance-spot', symbol: 'btcusdt', status: 'disabled' },
-    ])).toThrow('Duplicate market-data approval');
+    const duplicateApprovals = () =>
+      new MarketDataSourceRegistry([
+        { providerId: 'binance-spot', symbol: 'BTCUSDT', status: 'validated' },
+        { providerId: 'binance-spot', symbol: 'btcusdt', status: 'disabled' },
+      ]);
+    expect(duplicateApprovals).toThrow('Duplicate market-data approval');
   });
 
   it('rejects malformed approval identities and empty validation inputs', () => {
-    expect(() => new MarketDataSourceRegistry([
-      { providerId: ' ', symbol: 'BTCUSDT', status: 'validated' },
-    ])).toThrow('valid providerId and symbol');
+    const malformedApproval = () =>
+      new MarketDataSourceRegistry([
+        { providerId: ' ', symbol: 'BTCUSDT', status: 'validated' },
+      ]);
+    expect(malformedApproval).toThrow('valid providerId and symbol');
     const registry = new MarketDataSourceRegistry([]);
     expect(() => registry.assertValidated('', 'BTCUSDT')).toThrow(
       'Market-data provider and symbol are required',
