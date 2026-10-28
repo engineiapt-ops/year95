@@ -14,7 +14,7 @@ GitHub delivery: [PR #33](https://github.com/engineiapt-ops/year95/pull/33). Sta
 
 ### PR #008 — Web shell (approved brief)
 
-GitHub delivery: [PR #36](https://github.com/engineiapt-ops/year95/pull/36). Code is merged; real-auth acceptance is pending. The browser Supabase client, login, protected route, dashboard and typed API client are implemented. See [issue #37](https://github.com/engineiapt-ops/year95/issues/37) for the outstanding local Supabase smoke test.
+GitHub delivery: [PR #36](https://github.com/engineiapt-ops/year95/pull/36). Code is merged. Real-auth acceptance was completed by [PR #40](https://github.com/engineiapt-ops/year95/pull/40), merged at `1d6cbaddbae08863c6355d6f5aae2dabbff8b895`. The browser Supabase client, login, protected route, dashboard and typed API client are implemented. The local Supabase Auth smoke test and required CI/Docker workflows passed on PR #40 head `80db5ff9918ec4dff73037685e2751a5d827851e`; see [issue #37](https://github.com/engineiapt-ops/year95/issues/37) for the recorded evidence.
 
 ### Binance Spot market-data adapter
 
@@ -28,8 +28,8 @@ Do not renumber merged commits or infer an internal R identifier from a GitHub P
 
 ## Advancement gate
 
-- R-008 (web shell) is not fully accepted until issue #37 contains evidence that sign-in against the disposable local Supabase stack works end to end, including dashboard API health/readiness and authenticated `/v1/me`, logout, and session expiry.
-- Automated CI and the bundle secret scan passed for GitHub PR #36, but those checks use deterministic Auth mocks and do not establish that a real local Supabase sign-in was performed.
+- R-008 (web shell) is accepted: issue #37 is closed after successful real-auth evidence on PR #40. The disposable local Supabase flow verified sign-in, API JWT verification, dashboard health/readiness and authenticated `/v1/me`, session-expiry handling, logout, and browser secret safety.
+- Validation on PR #40 head `80db5ff9918ec4dff73037685e2751a5d827851e`: [CI](https://github.com/engineiapt-ops/year95/actions/runs/38648343189), [Local Supabase Auth Smoke](https://github.com/engineiapt-ops/year95/actions/runs/38648343217), and [API Docker](https://github.com/engineiapt-ops/year95/actions/runs/38648343167) all passed.
 - The repository does not currently contain an approved specification for R-009. Do not start implementation under that identifier based on guesswork. Once the R-008 smoke test is complete, obtain and register the approved R-009 brief before opening its implementation PR.
 
 ## Safety
