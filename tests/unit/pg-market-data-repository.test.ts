@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MarketDataSourceRegistry } from '../../packages/market-data/src/provider-validation.js';
 import { PgMarketDataRepository } from '../../packages/persistence/src/pg-market-data-repository.js';
 import type { PgQueryable } from '../../packages/persistence/src/pg-pool.js';
 
 const now = new Date('2026-10-28T12:00:00.000Z');
+const validatedSources = new MarketDataSourceRegistry([
+  { providerId: 'binance-spot', symbol: 'BTCUSDT', status: 'validated' },
+]);
 const candle = {
   openTime: new Date('2026-10-28T10:00:00.000Z'),
   closeTime: new Date('2026-10-28T10:59:59.999Z'),
@@ -19,7 +23,7 @@ function database(rows: readonly Record<string, unknown>[] = []): PgQueryable {
 describe('PgMarketDataRepository', () => {
   it('persists only validated closed candles using parameterized SQL', async () => {
     const db = database();
-    const repository = new PgMarketDataRepository(db, () => now);
+    const repository = new PgMarketDataRepository(db, validatedSources, () => now);
     await expect(
       repository.persistClosedCandles({
         symbol: 'btcusdt',
@@ -46,7 +50,7 @@ describe('PgMarketDataRepository', () => {
 
   it('rejects an open candle before issuing any database query', async () => {
     const db = database();
-    const repository = new PgMarketDataRepository(db, () => now);
+    const repository = new PgMarketDataRepository(db, validatedSources, () => now);
     await expect(
       repository.persistClosedCandles({
         symbol: 'BTCUSDT',
@@ -59,7 +63,7 @@ describe('PgMarketDataRepository', () => {
   });
 
   it('rejects invalid OHLC, invalid timeframes, duplicate candles, and unsupported symbols', async () => {
-    const repository = new PgMarketDataRepository(database(), () => now);
+    const repository = new PgMarketDataRepository(database(), validatedSources, () => now);
     await expect(
       repository.persistClosedCandles({
         symbol: 'BTCUSDT',
@@ -112,6 +116,7 @@ describe('PgMarketDataRepository', () => {
     const repository = new PgMarketDataRepository(db, () => now);
     const result = await repository.queryClosedCandles({
       symbol: 'BTCUSDT',
+      provider: 'binance-spot',
       timeframe: '1h',
       limit: 1,
     });
@@ -126,10 +131,16 @@ describe('PgMarketDataRepository', () => {
     expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain(
       'close_time IS NOT NULL',
     );
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain(
+      'data_provider = $3',
+    );
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]).toEqual([
+      'BTCUSDT', '1h', 'binance-spot', 1,
+    ]);
   });
 
   it('bounds query limits and rejects inverted time windows', async () => {
-    const repository = new PgMarketDataRepository(database(), () => now);
+    const repository = new PgMarketDataRepository(database(), validatedSources, () => now);
     await expect(
       repository.queryClosedCandles({
         symbol: 'BTCUSDT',
