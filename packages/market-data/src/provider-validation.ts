@@ -37,9 +37,13 @@ export class MarketDataSourceRegistry implements MarketDataSourceValidator {
     if (!normalizedProvider || !normalizedSymbol) {
       throw new Error('Market-data provider and symbol are required for validation');
     }
-    const status = this.approvals.get(MarketDataSourceRegistry.key(normalizedProvider, normalizedSymbol));
+    const status = this.approvals.get(
+      MarketDataSourceRegistry.key(normalizedProvider, normalizedSymbol),
+    );
     if (status !== 'validated') {
-      throw new Error(`Market-data source is not validated: ${normalizedProvider}/${normalizedSymbol}`);
+      throw new Error(
+        `Market-data source is not validated: ${normalizedProvider}/${normalizedSymbol}`,
+      );
     }
   }
 
