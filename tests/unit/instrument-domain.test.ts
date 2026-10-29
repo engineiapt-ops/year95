@@ -104,10 +104,12 @@ describe('timeframeDurationMs', () => {
     expect(timeframeDurationMs('1d')).toBe(86_400_000);
   });
 
-  it('rejects unsupported runtime values', () => {
-    expect(() => timeframeDurationMs('15m' as Timeframe)).toThrow(
-      'Unsupported timeframe',
-    );
+  it('rejects unsupported runtime values, including inherited object keys', () => {
+    for (const unsupported of ['15m', 'toString', 'constructor'] as const) {
+      expect(() => timeframeDurationMs(unsupported as Timeframe)).toThrow(
+        'Unsupported timeframe',
+      );
+    }
   });
 });
 
@@ -125,6 +127,14 @@ describe('createCandle', () => {
     });
     expect(candle.closeTime.getTime()).toBeGreaterThan(candle.openTime.getTime());
     expect(Object.isFrozen(candle)).toBe(true);
+
+    const changedOpenTime = candle.openTime;
+    changedOpenTime.setTime(0);
+    const changedCloseTime = candle.closeTime;
+    changedCloseTime.setTime(0);
+
+    expect(candle.openTime.toISOString()).toBe('2026-10-28T10:00:00.000Z');
+    expect(candle.closeTime.toISOString()).toBe('2026-10-28T10:59:59.999Z');
   });
 
   it('rejects a candle that is still forming', () => {
