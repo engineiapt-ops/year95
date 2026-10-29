@@ -171,6 +171,7 @@ export function normalizeCandles(
     throw new InvalidMarketDataError(`Unsupported market-data timeframe: ${String(timeframe)}`);
   }
 
+  const intervalMs = MARKET_TIMEFRAME_DURATION_MS[timeframe];
   const maxCandles = options.maxCandles ?? 1_200;
   if (!Number.isSafeInteger(maxCandles) || maxCandles <= 0) {
     throw new InvalidMarketDataError('maxCandles must be a positive integer');
@@ -196,6 +197,11 @@ export function normalizeCandles(
     const closeTimeMs = candle.closeTime.getTime();
     if (closeTimeMs <= openTimeMs) {
       throw new InvalidMarketDataError(`closeTime must be after openTime at candle ${index}`);
+    }
+    if (closeTimeMs - openTimeMs > intervalMs) {
+      throw new InvalidMarketDataError(
+        `Candle duration exceeds timeframe ${timeframe} at candle ${index}`,
+      );
     }
 
     // A candle whose close is still in the future is forming and cannot be used.
@@ -257,7 +263,6 @@ export function normalizeCandles(
     }
   }
 
-  const intervalMs = MARKET_TIMEFRAME_DURATION_MS[timeframe];
   for (let index = 1; index < deduplicated.length; index += 1) {
     const previous = deduplicated[index - 1];
     const current = deduplicated[index];
