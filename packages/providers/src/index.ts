@@ -6,3 +6,6 @@ export {
   SUPPORTED_BINANCE_SPOT_SYMBOLS,
 } from './binance-spot.js';
 export type { BinanceSpotErrorCode, BinanceSpotProviderOptions } from './binance-spot.js';
+
+export { BinancePriceProvider } from './binance-price.js';
+export type { BinancePriceProviderOptions } from './binance-price.js';
