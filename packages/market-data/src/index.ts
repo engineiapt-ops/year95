@@ -91,6 +91,8 @@ export function maxMarketDataAgeMs(timeframe: MarketTimeframe): number {
       return 4 * 60 * 60 * 1_000 * 1.5;
     case '1d':
       return 24 * 60 * 60 * 1_000 * 1.5;
+    default:
+      throw new InvalidMarketDataError(`Unsupported market-data timeframe: ${String(timeframe)}`);
   }
 }
 
@@ -171,6 +173,9 @@ export function normalizeCandles(
   const nowMs = now.getTime();
   if (!Number.isFinite(nowMs)) {
     throw new InvalidMarketDataError('Market-data normalization time is invalid');
+  }
+  if (!(MARKET_TIMEFRAMES as readonly string[]).includes(timeframe)) {
+    throw new InvalidMarketDataError(`Unsupported market-data timeframe: ${String(timeframe)}`);
   }
 
   const maxCandles = options.maxCandles ?? 1_200;
