@@ -82,14 +82,14 @@ docker run --rm -p 3000:3000 -e DATABASE_URL="$DATABASE_URL" -e CORS_ORIGINS="ht
 
 The `API Docker` GitHub Actions workflow builds the image for API-related pull requests.
 
-## Binance Spot market-data adapter
+## Binance REST market-data provider
 
-`@year95/providers` exports `BinanceSpotProvider`, which uses the injected `BINANCE_BASE_URL` value and the public Binance Spot `/api/v3/klines` endpoint. It does not read `process.env` during module import and requires no Binance credentials.
+`@year95/providers` exports `BinancePriceProvider`, which implements the provider-neutral `PriceProvider` contract from `@year95/contracts`. It uses the injected `BINANCE_BASE_URL` from application configuration and the public Binance Spot `/api/v3/klines` endpoint. It does not read `process.env` during module import and requires no Binance credentials. The existing `BinanceSpotProvider` API remains available for the current market-data snapshot contract.
 
-- This initial adapter accepts only the verified `BTCUSDT` instrument and the `1h`, `4h`, and `1d` intervals.
-- Kline responses are validated before mapping to the provider-neutral `MarketCandle` contract. Candles whose close time is still in the future are excluded; invalid OHLCV, timestamps, duplicate candles, unsupported symbols, and invalid response shapes fail closed.
-- `getLatestCandles` rejects missing data and stale data. The latest closed candle must be within 1.5 times its timeframe, preserving the freshness rule recovered from the legacy `src/marketdata/quality.ts` and `src/marketdata/quality.test.ts`.
-- `getHistory` pages backward in bounded chunks, up to 50,000 candles, and returns closed records in chronological order.
-- This PR adds the adapter and contracts only. It does not add an HTTP market-data route, persist candles, generate decisions, or create paper trades; those require separately scoped work.
+- The initial verified mapping supports `BTCUSDT` and timeframes `1h`, `4h`, and `1d` only.
+- Numeric fields and timestamps are parsed safely. Invalid OHLCV, malformed responses, duplicate candles, unsupported symbols/timeframes, and timestamps outside JavaScript's valid `Date` range fail closed.
+- Candles whose `closeTime` is in the future are discarded. `getHistory` pages backward in requests capped at 1,000 rows and returns closed candles chronologically.
+- Network/timeouts and transient HTTP statuses (408, 425, 429, and 5xx) receive bounded retries with exponential full jitter. Non-transient HTTP errors fail immediately. Retry count, delays, randomness, sleeping, transport, clock, base URL, and timeout can be injected for deterministic tests.
+- A reusable `PriceProvider` contract suite validates candle shape, closure, order, and history bounds using a recorded JSON fixture. CI never contacts the real Binance service.
 
-The adapter receives its transport, clock, base URL, and timeout through its constructor so tests can validate behavior without external network access.
+This PR does not add WebSocket streaming, persistence, migrations, ingestion scheduling, HTTP market-data routes, decisions, or paper trades. Those remain separately scoped work.
