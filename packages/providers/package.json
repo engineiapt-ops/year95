@@ -10,8 +10,8 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "typecheck": "pnpm --filter @year95/market-data build && tsc -p tsconfig.json --noEmit",
-    "build": "pnpm --filter @year95/market-data build && tsc -p tsconfig.json"
+    "typecheck": "pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && tsc -p tsconfig.json"
   },
   "dependencies": {
     "@year95/contracts": "workspace:*",
