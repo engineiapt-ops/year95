@@ -76,6 +76,45 @@ describe('Binance REST retry policy', () => {
     expect(delays).toEqual([50, 100]);
   });
 
+  it('retries when the response body stream fails after headers arrive', async () => {
+    const delays: number[] = [];
+    let calls = 0;
+    const provider = new BinanceSpotProvider({
+      baseUrl,
+      now: () => new Date(checkedAtMs),
+      maxRetries: 1,
+      retryBaseDelayMs: 100,
+      retryMaxDelayMs: 200,
+      randomImpl: () => 0.25,
+      sleepImpl: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        if (calls === 1) {
+          const brokenBody = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.error(new TypeError('connection reset during body'));
+            },
+          });
+          return new Response(brokenBody, {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return jsonResponse([
+          rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
+        ]);
+      },
+    });
+
+    await expect(
+      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
+    ).resolves.toHaveLength(1);
+    expect(calls).toBe(2);
+    expect(delays).toEqual([25]);
+  });
+
   it('retries transient HTTP statuses but does not retry permanent 4xx errors', async () => {
     const delays: number[] = [];
     let transientCalls = 0;
