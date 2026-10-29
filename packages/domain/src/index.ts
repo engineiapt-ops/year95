@@ -79,8 +79,7 @@ export function isMappingValidated(mapping: ProviderMapping): boolean {
 /** Only crypto spot instruments with at least one complete, validated mapping are enabled. */
 export function isInstrumentEnabled(instrument: Instrument): boolean {
   return (
-    instrument.assetType === 'crypto_spot' &&
-    instrument.providerMappings.some(isMappingValidated)
+    instrument.assetType === 'crypto_spot' && instrument.providerMappings.some(isMappingValidated)
   );
 }
 
