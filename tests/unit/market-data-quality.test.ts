@@ -132,19 +132,19 @@ describe('evaluateQuality and assertFresh', () => {
   it.each(cases)(
     'preserves the 1.5x freshness boundary for $timeframe',
     ({ timeframe, durationMs }) => {
-    const maxAgeMs = durationMs * 1.5;
-    const boundary = new Date(now.getTime() - maxAgeMs);
-    const fresh = evaluateQuality([candleEndingAt(boundary)], now, timeframe);
-    const stale = evaluateQuality(
-      [candleEndingAt(new Date(boundary.getTime() - 1))],
-      now,
-      timeframe,
-    );
+      const maxAgeMs = durationMs * 1.5;
+      const boundary = new Date(now.getTime() - maxAgeMs);
+      const fresh = evaluateQuality([candleEndingAt(boundary)], now, timeframe);
+      const stale = evaluateQuality(
+        [candleEndingAt(new Date(boundary.getTime() - 1))],
+        now,
+        timeframe,
+      );
 
-    expect(fresh.status).toBe('fresh');
-    expect(fresh.ageMs).toBe(maxAgeMs);
-    expect(fresh.maxAgeMs).toBe(maxAgeMs);
-    expect(stale.status).toBe('stale');
+      expect(fresh.status).toBe('fresh');
+      expect(fresh.ageMs).toBe(maxAgeMs);
+      expect(fresh.maxAgeMs).toBe(maxAgeMs);
+      expect(stale.status).toBe('stale');
       expect(stale.ageMs).toBe(maxAgeMs + 1);
     },
   );
