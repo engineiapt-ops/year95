@@ -139,7 +139,7 @@ export class PgMarketDataRepository {
     }
 
     for (const candle of input.candles) {
-      await this.db.query(
+      const result = await this.db.query<{ open_time: Date | string }>(
         `INSERT INTO public.market_data
           (ativo, timeframe, open_time, close_time, open, high, low, close, volume, data_provider)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -151,8 +151,11 @@ export class PgMarketDataRepository {
            close = EXCLUDED.close,
            volume = EXCLUDED.volume,
            data_provider = EXCLUDED.data_provider
-         WHERE public.market_data.close_time IS NULL
-            OR public.market_data.close_time <= EXCLUDED.close_time`,
+         WHERE (public.market_data.data_provider IS NULL
+                OR public.market_data.data_provider = EXCLUDED.data_provider)
+           AND (public.market_data.close_time IS NULL
+                OR public.market_data.close_time <= EXCLUDED.close_time)
+         RETURNING open_time`,
         [
           symbol,
           input.timeframe,
@@ -166,6 +169,11 @@ export class PgMarketDataRepository {
           provider,
         ],
       );
+      if (result.rowCount === 0 || result.rows.length === 0) {
+        throw new Error(
+          'Candle conflicts with an existing provider or newer close time; existing data was preserved',
+        );
+      }
     }
     return input.candles.length;
   }
