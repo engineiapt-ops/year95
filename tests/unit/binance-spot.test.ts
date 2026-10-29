@@ -65,9 +65,7 @@ describe('Binance REST retry policy', () => {
       fetchImpl: async () => {
         calls += 1;
         if (calls < 3) throw new Error('temporary network failure');
-        return jsonResponse([
-          rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
-        ]);
+        return jsonResponse([rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z')]);
       },
     });
 
@@ -95,9 +93,7 @@ describe('Binance REST retry policy', () => {
         transientCalls += 1;
         if (transientCalls === 1) return jsonResponse({ message: 'rate limited' }, 429);
         if (transientCalls === 2) return jsonResponse({ message: 'temporarily unavailable' }, 503);
-        return jsonResponse([
-          rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
-        ]);
+        return jsonResponse([rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z')]);
       },
     });
 
@@ -144,13 +140,13 @@ describe('Binance REST retry policy', () => {
       },
     });
 
-    await expect(
-      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
-    ).rejects.toMatchObject({
-      name: 'BinanceSpotProviderError',
-      code: 'REQUEST_FAILED',
-      message: 'Binance Spot request failed or timed out',
-    });
+    await expect(provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' })).rejects.toMatchObject(
+      {
+        name: 'BinanceSpotProviderError',
+        code: 'REQUEST_FAILED',
+        message: 'Binance Spot request failed or timed out',
+      },
+    );
     expect(delays).toEqual([50, 100]);
   });
 
@@ -284,15 +280,7 @@ describe('Binance Spot adapter', () => {
 
     const invalidDateTimestampProvider = makeProvider(async () =>
       jsonResponse([
-        [
-          8_640_000_000_000_001,
-          '100',
-          '110',
-          '90',
-          '105',
-          '12.5',
-          8_640_000_000_000_999,
-        ],
+        [8_640_000_000_000_001, '100', '110', '90', '105', '12.5', 8_640_000_000_000_999],
       ]),
     );
     await expect(
