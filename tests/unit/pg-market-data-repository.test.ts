@@ -62,7 +62,9 @@ describe('PgMarketDataRepository', () => {
     expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain(
       'public.market_data.data_provider = EXCLUDED.data_provider',
     );
-    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain('RETURNING open_time');
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain(
+      'RETURNING open_time',
+    );
   });
 
   it('rejects an open candle before issuing any database query', async () => {
