@@ -351,7 +351,7 @@ export class BinanceSpotProvider implements MarketDataProvider {
     await this.sleepImpl(Math.floor(sample * exponentialDelay));
   }
 
-  private async request(url: URL): Promise<Response> {
+  private async request(url: URL): Promise<string> {
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       let response: Response;
       try {
@@ -371,16 +371,31 @@ export class BinanceSpotProvider implements MarketDataProvider {
         continue;
       }
 
-      if (response.ok) return response;
-      if (!isRetryableHttpStatus(response.status) || attempt >= this.maxRetries) {
-        throw new BinanceSpotProviderError(
-          'HTTP_ERROR',
-          `Binance Spot returned HTTP ${response.status}`,
-          response.status,
-        );
+      if (!response.ok) {
+        if (!isRetryableHttpStatus(response.status) || attempt >= this.maxRetries) {
+          throw new BinanceSpotProviderError(
+            'HTTP_ERROR',
+            `Binance Spot returned HTTP ${response.status}`,
+            response.status,
+          );
+        }
+        await this.waitBeforeRetry(attempt);
+        continue;
       }
 
-      await this.waitBeforeRetry(attempt);
+      // Consume the response body before considering the request complete. The
+      // same abort signal bounds body reads, not just waiting for response headers.
+      try {
+        return await response.text();
+      } catch {
+        if (attempt >= this.maxRetries) {
+          throw new BinanceSpotProviderError(
+            'REQUEST_FAILED',
+            'Binance Spot request failed or timed out',
+          );
+        }
+        await this.waitBeforeRetry(attempt);
+      }
     }
 
     throw new BinanceSpotProviderError(
@@ -402,11 +417,11 @@ export class BinanceSpotProvider implements MarketDataProvider {
       url.searchParams.set('endTime', String(normalized.endTime));
     }
 
-    const response = await this.request(url);
+    const responseBody = await this.request(url);
 
     let payload: unknown;
     try {
-      payload = (await response.json()) as unknown;
+      payload = JSON.parse(responseBody) as unknown;
     } catch {
       throw new BinanceSpotProviderError('INVALID_RESPONSE', 'Binance Spot returned invalid JSON');
     }
