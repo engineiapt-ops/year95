@@ -85,13 +85,11 @@ export function isInstrumentEnabled(instrument: Instrument): boolean {
 }
 
 export function timeframeDurationMs(timeframe: Timeframe): number {
-  const duration = TIMEFRAME_DURATIONS_MS[timeframe];
-
-  if (duration === undefined) {
+  if (!Object.prototype.hasOwnProperty.call(TIMEFRAME_DURATIONS_MS, timeframe)) {
     throw new RangeError(`Unsupported timeframe: ${String(timeframe)}`);
   }
 
-  return duration;
+  return TIMEFRAME_DURATIONS_MS[timeframe];
 }
 
 export function createCandle(input: CandleInput): Candle {
@@ -134,10 +132,22 @@ export function createCandle(input: CandleInput): Candle {
     throw new Error('Candle volume must be finite and non-negative');
   }
 
-  return Object.freeze({
-    ...input,
-    openTime: new Date(input.openTime.getTime()),
-    closeTime: new Date(input.closeTime.getTime()),
-    closed: true as const,
-  });
+  const openTimeMs = input.openTime.getTime();
+  const closeTimeMs = input.closeTime.getTime();
+  const candle: Candle = {
+    get openTime() {
+      return new Date(openTimeMs);
+    },
+    get closeTime() {
+      return new Date(closeTimeMs);
+    },
+    open: input.open,
+    high: input.high,
+    low: input.low,
+    close: input.close,
+    volume: input.volume,
+    closed: true,
+  };
+
+  return Object.freeze(candle);
 }
