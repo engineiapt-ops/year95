@@ -52,7 +52,13 @@ describe('BinancePriceProvider REST adapter', () => {
     'maps the %s interval through the configured Binance REST origin',
     async (timeframe) => {
       const requestedUrls: string[] = [];
-      const provider = createProvider(fixtureFetch(requestedUrls));
+      const provider = createProvider(async (input) => {
+        requestedUrls.push(String(input));
+        return new Response('[]', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      });
 
       await provider.getCandles({ instrument: 'btcusdt', timeframe, limit: 2 });
 
