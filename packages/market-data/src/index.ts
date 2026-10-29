@@ -61,6 +61,12 @@ export interface MarketDataProvider {
   getHistory(query: HistoricalCandlesQuery): Promise<readonly MarketCandle[]>;
 }
 
+const MARKET_TIMEFRAME_DURATION_MS: Readonly<Record<MarketTimeframe, number>> = Object.freeze({
+  '1h': 60 * 60 * 1_000,
+  '4h': 4 * 60 * 60 * 1_000,
+  '1d': 24 * 60 * 60 * 1_000,
+});
+
 export class InvalidMarketDataError extends Error {
   readonly code = 'INVALID_MARKET_DATA' as const;
 
@@ -84,16 +90,11 @@ export class MarketDataStaleError extends Error {
 }
 
 export function maxMarketDataAgeMs(timeframe: MarketTimeframe): number {
-  switch (timeframe) {
-    case '1h':
-      return 60 * 60 * 1_000 * 1.5;
-    case '4h':
-      return 4 * 60 * 60 * 1_000 * 1.5;
-    case '1d':
-      return 24 * 60 * 60 * 1_000 * 1.5;
-    default:
-      throw new InvalidMarketDataError(`Unsupported market-data timeframe: ${String(timeframe)}`);
+  const durationMs = MARKET_TIMEFRAME_DURATION_MS[timeframe];
+  if (durationMs === undefined) {
+    throw new InvalidMarketDataError(`Unsupported market-data timeframe: ${String(timeframe)}`);
   }
+  return durationMs * 1.5;
 }
 
 export function evaluateLatestCandleFreshness(input: {
@@ -138,13 +139,6 @@ export function assertLatestCandleFresh(input: {
   }
   return freshness;
 }
-
-
-const MARKET_TIMEFRAME_DURATION_MS: Readonly<Record<MarketTimeframe, number>> = Object.freeze({
-  '1h': 60 * 60 * 1_000,
-  '4h': 4 * 60 * 60 * 1_000,
-  '1d': 24 * 60 * 60 * 1_000,
-});
 
 export class MarketDataGapError extends Error {
   readonly code = 'MARKET_DATA_GAP' as const;
