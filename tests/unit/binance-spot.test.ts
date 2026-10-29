@@ -102,15 +102,13 @@ describe('Binance REST retry policy', () => {
             headers: { 'content-type': 'application/json' },
           });
         }
-        return jsonResponse([
-          rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
-        ]);
+        return jsonResponse([rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z')]);
       },
     });
 
-    await expect(
-      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
-    ).resolves.toHaveLength(1);
+    await expect(provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' })).resolves.toHaveLength(
+      1,
+    );
     expect(calls).toBe(2);
     expect(delays).toEqual([25]);
   });
