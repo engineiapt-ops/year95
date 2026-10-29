@@ -38,6 +38,16 @@ GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Sta
 
 GitHub delivery: implementation PR opened from this brief; acceptance is pending CI and review.
 
+## PR #011 — Market-data contracts and quality
+
+Implementation and acceptance evidence for this scope are tracked in [GitHub PR #53](https://github.com/engineiapt-ops/year95/pull/53); the PR history records the final CI and review results.
+
+- `packages/contracts/src/market-data.ts` defines provider-neutral `PriceProvider`, `CandleRepository`, and `ProvenanceRecord` contracts.
+- `packages/market-data` normalizes closed candles, validates OHLCV, sorts chronologically, detects gaps, discards forming candles, and applies the legacy 1.5× timeframe freshness threshold. Quality functions take an explicit timestamp; no direct wall-clock read is used.
+- Tests cover the 1h/4h/1d freshness boundaries, empty/future/stale data, forming candles, gaps, invalid OHLCV, and duplicate behavior.
+- **Declared legacy behavior change:** legacy normalization rejected all duplicate open times. This PR deduplicates exact duplicate records but rejects the entire batch when records sharing an open time differ in close time or OHLCV.
+- No Binance adapter, SQL, migration, HTTP route, or decision-flow changes are included.
+
 ## Identifier correction
 
 The approved work-item brief provided for the web shell is titled `PR #008 — Web shell`; it was delivered by GitHub PR #36. The former `(#008)` suffix on GitHub PR #34's title was ambiguous and has been removed. The GitHub PR numbers themselves remain historical, permanent identifiers.
