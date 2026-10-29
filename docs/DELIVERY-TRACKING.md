@@ -40,7 +40,7 @@ GitHub delivery: implementation PR opened from this brief; acceptance is pending
 
 ## PR #011 — Market-data contracts and quality
 
-Approved scope is implemented in [GitHub PR #53](https://github.com/engineiapt-ops/year95/pull/53); acceptance remains pending CI/review.
+Implementation and acceptance evidence for this scope are tracked in [GitHub PR #53](https://github.com/engineiapt-ops/year95/pull/53); the PR history records the final CI and review results.
 
 - `packages/contracts/src/market-data.ts` defines provider-neutral `PriceProvider`, `CandleRepository`, and `ProvenanceRecord` contracts.
 - `packages/market-data` normalizes closed candles, validates OHLCV, sorts chronologically, detects gaps, discards forming candles, and applies the legacy 1.5× timeframe freshness threshold. Quality functions take an explicit timestamp; no direct wall-clock read is used.
