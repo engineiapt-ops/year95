@@ -139,6 +139,9 @@ importers:
 
   packages/providers:
     dependencies:
+      '@year95/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@year95/market-data':
         specifier: workspace:*
         version: link:../market-data
