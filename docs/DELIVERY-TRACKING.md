@@ -40,7 +40,7 @@ GitHub delivery: implementation PR opened from this brief; acceptance is pending
 
 ## PR #012 — Binance REST
 
-Implementation is tracked in [GitHub PR #54](https://github.com/engineiapt-ops/year95/pull/54); acceptance remains pending CI and review.
+Implementation, CI, Docker, and local Auth smoke evidence are tracked in [GitHub PR #54](https://github.com/engineiapt-ops/year95/pull/54); its merge state records final acceptance.
 
 - `packages/providers/src/binance-price.ts` implements the provider-neutral `PriceProvider` contract while retaining the existing `BinanceSpotProvider` API.
 - Each REST call is limited to 1,000 klines; history pages backwards and returns chronological closed candles. Transport failures/timeouts and transient HTTP responses use bounded exponential full jitter; permanent 4xx failures do not retry.
