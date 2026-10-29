@@ -42,6 +42,9 @@ export default defineWorkspace([
         '@year95/contracts': fileURLToPath(
           new URL('./packages/contracts/src/index.ts', import.meta.url),
         ),
+        '@year95/market-data': fileURLToPath(
+          new URL('./packages/market-data/src/index.ts', import.meta.url),
+        ),
       },
     },
     test: {
