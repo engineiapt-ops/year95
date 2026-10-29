@@ -5,6 +5,7 @@ import {
   InvalidMarketDataError,
   MarketDataGapError,
   MarketDataStaleError,
+  maxMarketDataAgeMs,
   normalizeCandles,
   type MarketCandle,
   type MarketTimeframe,
@@ -119,6 +120,20 @@ describe('normalizeCandles', () => {
         '1h',
       ),
     ).toThrow(/Unexpected candle spacing/);
+  });
+});
+
+describe('maxMarketDataAgeMs', () => {
+  it('uses the fixed 1.5x threshold and rejects unsupported runtime keys', () => {
+    expect(maxMarketDataAgeMs('1h')).toBe(5_400_000);
+    expect(maxMarketDataAgeMs('4h')).toBe(21_600_000);
+    expect(maxMarketDataAgeMs('1d')).toBe(129_600_000);
+
+    for (const unsupported of ['toString', 'constructor', '15m'] as const) {
+      expect(() => maxMarketDataAgeMs(unsupported as MarketTimeframe)).toThrow(
+        InvalidMarketDataError,
+      );
+    }
   });
 });
 
