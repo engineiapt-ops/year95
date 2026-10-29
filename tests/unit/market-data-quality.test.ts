@@ -69,7 +69,11 @@ describe('normalizeCandles', () => {
     );
 
     expect(normalized).toHaveLength(1);
-    expect(normalized.every((item) => item.closeTime.getTime() <= Date.parse('2026-09-26T11:30:00.000Z'))).toBe(true);
+    expect(
+      normalized.every(
+        (item) => item.closeTime.getTime() <= Date.parse('2026-09-26T11:30:00.000Z'),
+      ),
+    ).toBe(true);
   });
 
   it('fails closed when the input is empty or every candle is still forming', () => {
@@ -125,7 +129,9 @@ describe('evaluateQuality and assertFresh', () => {
     { timeframe: '1d', durationMs: 86_400_000 },
   ];
 
-  it.each(cases)('preserves the 1.5x freshness boundary for $timeframe', ({ timeframe, durationMs }) => {
+  it.each(cases)(
+    'preserves the 1.5x freshness boundary for $timeframe',
+    ({ timeframe, durationMs }) => {
     const maxAgeMs = durationMs * 1.5;
     const boundary = new Date(now.getTime() - maxAgeMs);
     const fresh = evaluateQuality([candleEndingAt(boundary)], now, timeframe);
@@ -139,8 +145,9 @@ describe('evaluateQuality and assertFresh', () => {
     expect(fresh.ageMs).toBe(maxAgeMs);
     expect(fresh.maxAgeMs).toBe(maxAgeMs);
     expect(stale.status).toBe('stale');
-    expect(stale.ageMs).toBe(maxAgeMs + 1);
-  });
+      expect(stale.ageMs).toBe(maxAgeMs + 1);
+    },
+  );
 
   it('throws typed errors for empty, future, and stale data', () => {
     expect(() => evaluateQuality([], now, '1h')).toThrow(InvalidMarketDataError);
