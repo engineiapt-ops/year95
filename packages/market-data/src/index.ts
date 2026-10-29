@@ -137,6 +137,187 @@ export function assertLatestCandleFresh(input: {
   return freshness;
 }
 
+
+const MARKET_TIMEFRAME_DURATION_MS: Readonly<Record<MarketTimeframe, number>> = Object.freeze({
+  '1h': 60 * 60 * 1_000,
+  '4h': 4 * 60 * 60 * 1_000,
+  '1d': 24 * 60 * 60 * 1_000,
+});
+
+export class MarketDataGapError extends Error {
+  readonly code = 'MARKET_DATA_GAP' as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'MarketDataGapError';
+  }
+}
+
+/**
+ * Sorts closed candles, removes exact duplicates, and rejects conflicting rows
+ * or gaps. The supplied time is deliberately explicit so callers can use an
+ * injected Clock and tests remain deterministic.
+ */
+export function normalizeCandles(
+  candles: readonly MarketCandle[],
+  now: Date,
+  timeframe: MarketTimeframe,
+  options: { readonly maxCandles?: number } = {},
+): MarketCandle[] {
+  if (!Array.isArray(candles) || candles.length === 0) {
+    throw new InvalidMarketDataError('Market data requires at least one candle');
+  }
+
+  const nowMs = now.getTime();
+  if (!Number.isFinite(nowMs)) {
+    throw new InvalidMarketDataError('Market-data normalization time is invalid');
+  }
+
+  const maxCandles = options.maxCandles ?? 1_200;
+  if (!Number.isSafeInteger(maxCandles) || maxCandles <= 0) {
+    throw new InvalidMarketDataError('maxCandles must be a positive integer');
+  }
+  if (candles.length > maxCandles) {
+    throw new InvalidMarketDataError(
+      `Market data exceeds maxCandles: ${candles.length} > ${maxCandles}`,
+    );
+  }
+
+  const normalized: MarketCandle[] = [];
+  for (const [index, candle] of candles.entries()) {
+    if (
+      !(candle.openTime instanceof Date) ||
+      !Number.isFinite(candle.openTime.getTime()) ||
+      !(candle.closeTime instanceof Date) ||
+      !Number.isFinite(candle.closeTime.getTime())
+    ) {
+      throw new InvalidMarketDataError(`Invalid candle timestamp at candle ${index}`);
+    }
+
+    const openTimeMs = candle.openTime.getTime();
+    const closeTimeMs = candle.closeTime.getTime();
+    if (closeTimeMs <= openTimeMs) {
+      throw new InvalidMarketDataError(`closeTime must be after openTime at candle ${index}`);
+    }
+
+    // A candle whose close is still in the future is forming and cannot be used.
+    if (closeTimeMs > nowMs) continue;
+
+    const positiveValues = [candle.open, candle.high, candle.low, candle.close];
+    if (positiveValues.some((value) => !Number.isFinite(value) || value <= 0)) {
+      throw new InvalidMarketDataError(`Invalid OHLC value at candle ${index}`);
+    }
+    if (!Number.isFinite(candle.volume) || candle.volume < 0) {
+      throw new InvalidMarketDataError(`Invalid volume at candle ${index}`);
+    }
+    if (
+      candle.high < candle.low ||
+      candle.high < candle.open ||
+      candle.high < candle.close ||
+      candle.low > candle.open ||
+      candle.low > candle.close
+    ) {
+      throw new InvalidMarketDataError(`Invalid OHLC relationship at candle ${index}`);
+    }
+
+    normalized.push({
+      openTime: new Date(openTimeMs),
+      closeTime: new Date(closeTimeMs),
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+      volume: candle.volume,
+    });
+  }
+
+  if (normalized.length === 0) {
+    throw new InvalidMarketDataError('Market data requires at least one closed candle');
+  }
+
+  normalized.sort((left, right) => left.openTime.getTime() - right.openTime.getTime());
+
+  const deduplicated: MarketCandle[] = [];
+  for (const candle of normalized) {
+    const previous = deduplicated[deduplicated.length - 1];
+    if (!previous || previous.openTime.getTime() !== candle.openTime.getTime()) {
+      deduplicated.push(candle);
+      continue;
+    }
+
+    const identical =
+      previous.closeTime.getTime() === candle.closeTime.getTime() &&
+      previous.open === candle.open &&
+      previous.high === candle.high &&
+      previous.low === candle.low &&
+      previous.close === candle.close &&
+      previous.volume === candle.volume;
+    if (!identical) {
+      throw new InvalidMarketDataError(
+        `Conflicting duplicate candle timestamp: ${candle.openTime.toISOString()}`,
+      );
+    }
+  }
+
+  const intervalMs = MARKET_TIMEFRAME_DURATION_MS[timeframe];
+  for (let index = 1; index < deduplicated.length; index += 1) {
+    const previous = deduplicated[index - 1];
+    const current = deduplicated[index];
+    if (!previous || !current) {
+      throw new InvalidMarketDataError('Market data contains an invalid candle sequence');
+    }
+
+    const interval = current.openTime.getTime() - previous.openTime.getTime();
+    if (interval > intervalMs) {
+      throw new MarketDataGapError(
+        `Market-data gap detected between ${previous.openTime.toISOString()} and ${current.openTime.toISOString()}`,
+      );
+    }
+    if (interval < intervalMs) {
+      throw new InvalidMarketDataError(
+        `Unexpected candle spacing between ${previous.openTime.toISOString()} and ${current.openTime.toISOString()}`,
+      );
+    }
+  }
+
+  return deduplicated;
+}
+
+/** Evaluates quality against an explicit timestamp; no wall-clock access occurs here. */
+export function evaluateQuality(
+  candles: readonly MarketCandle[],
+  now: Date,
+  timeframe: MarketTimeframe,
+): MarketDataFreshness {
+  if (!Array.isArray(candles) || candles.length === 0) {
+    throw new InvalidMarketDataError('Market data quality requires at least one closed candle');
+  }
+
+  const latestCandle = candles[candles.length - 1];
+  if (!latestCandle) {
+    throw new InvalidMarketDataError('Market data quality requires at least one closed candle');
+  }
+
+  return evaluateLatestCandleFreshness({
+    timeframe,
+    latestCandle,
+    checkedAt: now,
+  });
+}
+
+/** Rejects stale data with a typed error so downstream decisions fail closed. */
+export function assertFresh(
+  candles: readonly MarketCandle[],
+  now: Date,
+  timeframe: MarketTimeframe,
+): MarketDataFreshness {
+  const freshness = evaluateQuality(candles, now, timeframe);
+  if (freshness.status === 'stale') {
+    throw new MarketDataStaleError(freshness);
+  }
+  return freshness;
+}
+
 export {
   MarketDataSourceRegistry,
   assertValidatedMarketDataSnapshot,
