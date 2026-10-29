@@ -22,7 +22,7 @@ function database(rows: readonly Record<string, unknown>[] = []): PgQueryable {
 
 describe('PgMarketDataRepository', () => {
   it('persists only validated closed candles using parameterized SQL', async () => {
-    const db = database();
+    const db = database([{ open_time: candle.openTime }]);
     const repository = new PgMarketDataRepository(db, validatedSources, () => now);
     await expect(
       repository.persistClosedCandles({
@@ -46,6 +46,23 @@ describe('PgMarketDataRepository', () => {
       12.5,
       'binance-spot',
     ]);
+  });
+
+  it('rejects a provider conflict instead of overwriting the canonical candle', async () => {
+    const db = database();
+    const repository = new PgMarketDataRepository(db, validatedSources, () => now);
+    await expect(
+      repository.persistClosedCandles({
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        provider: 'binance-spot',
+        candles: [candle],
+      }),
+    ).rejects.toThrow('Candle conflicts with an existing provider or newer close time');
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain(
+      'public.market_data.data_provider = EXCLUDED.data_provider',
+    );
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toContain('RETURNING open_time');
   });
 
   it('rejects an open candle before issuing any database query', async () => {
