@@ -15,7 +15,7 @@ export type BinancePriceProviderOptions = BinanceSpotProviderOptions;
  * currently approved BTCUSDT provider symbol.
  */
 export class BinancePriceProvider implements PriceProvider {
-  readonly id = 'binance';
+  readonly id = 'binance-spot';
 
   private readonly adapter: BinanceSpotProvider;
 
