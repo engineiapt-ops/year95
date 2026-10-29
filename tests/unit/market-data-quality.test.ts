@@ -105,16 +105,8 @@ describe('normalizeCandles', () => {
   });
 
   it('rejects a single candle whose span does not match its timeframe', () => {
-    const overlong = candle(
-      '2026-09-26T08:00:00.000Z',
-      0,
-      '2026-09-26T13:59:59.999Z',
-    );
-    const undersized = candle(
-      '2026-09-26T13:00:00.000Z',
-      0,
-      '2026-09-26T13:30:00.000Z',
-    );
+    const overlong = candle('2026-09-26T08:00:00.000Z', 0, '2026-09-26T13:59:59.999Z');
+    const undersized = candle('2026-09-26T13:00:00.000Z', 0, '2026-09-26T13:30:00.000Z');
 
     expect(() => normalizeCandles([overlong], now, '1h')).toThrow(
       /Candle duration does not match timeframe/,
