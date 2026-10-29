@@ -14,6 +14,7 @@ A provider adapter having an identifier or being registered does not prove that 
 - A provider/instrument pair is usable only when an injected shared `MarketDataSourceValidator` explicitly approves it. Unknown and disabled pairs fail closed; there is no default trust.
 - Persistence validates the provider/instrument pair before database access and scopes reads to the requested approved provider. It remains provider-neutral and contains no Binance- or Saxo-specific branching.
 - Provider adapters report their stable provider identity and normalize source responses. They do not self-authorize a mapping merely by existing or being registered.
+- The canonical provider identity for the currently approved Binance Spot BTCUSDT source is `binance-spot`, matching the existing validation and persistence approval. `BinancePriceProvider.id` must use this exact value; the alias `binance` is not an approved mapping and must not be used.
 - Every future quantitative decision entrypoint must enforce this same validation contract before calculating or emitting a decision. The current repository does not yet contain a decision workflow to wire; this is a mandatory acceptance criterion for that workflow, not a claim that such integration already exists.
 - New providers, including Saxo, require separately reviewed provider and instrument approvals and tests. A Saxo adapter being present in the legacy repository is not approval for YEAR95.
 
