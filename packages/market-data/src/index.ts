@@ -90,11 +90,10 @@ export class MarketDataStaleError extends Error {
 }
 
 export function maxMarketDataAgeMs(timeframe: MarketTimeframe): number {
-  const durationMs = MARKET_TIMEFRAME_DURATION_MS[timeframe];
-  if (durationMs === undefined) {
+  if (!Object.prototype.hasOwnProperty.call(MARKET_TIMEFRAME_DURATION_MS, timeframe)) {
     throw new InvalidMarketDataError(`Unsupported market-data timeframe: ${String(timeframe)}`);
   }
-  return durationMs * 1.5;
+  return MARKET_TIMEFRAME_DURATION_MS[timeframe] * 1.5;
 }
 
 export function evaluateLatestCandleFreshness(input: {
