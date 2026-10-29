@@ -166,9 +166,9 @@ describe('evaluateQuality and assertFresh', () => {
 
   it('throws typed errors for empty, future, and stale data', () => {
     expect(() => evaluateQuality([], now, '1h')).toThrow(InvalidMarketDataError);
-    expect(() =>
-      evaluateQuality([candleEndingAt(new Date(now.getTime() + 1))], now, '1h'),
-    ).toThrow(/future/);
+    expect(() => evaluateQuality([candleEndingAt(new Date(now.getTime() + 1))], now, '1h')).toThrow(
+      /future/,
+    );
     expect(() =>
       assertFresh([candleEndingAt(new Date(now.getTime() - 5_400_001))], now, '1h'),
     ).toThrow(MarketDataStaleError);
