@@ -35,9 +35,7 @@ describe('MarketDataSourceRegistry', () => {
 
   it('rejects malformed approval identities and empty validation inputs', () => {
     const malformedApproval = () =>
-      new MarketDataSourceRegistry([
-        { providerId: ' ', symbol: 'BTCUSDT', status: 'validated' },
-      ]);
+      new MarketDataSourceRegistry([{ providerId: ' ', symbol: 'BTCUSDT', status: 'validated' }]);
     expect(malformedApproval).toThrow('valid providerId and symbol');
     const registry = new MarketDataSourceRegistry([]);
     expect(() => registry.assertValidated('', 'BTCUSDT')).toThrow(
@@ -46,7 +44,6 @@ describe('MarketDataSourceRegistry', () => {
   });
 });
 
-
 describe('assertValidatedMarketDataSnapshot', () => {
   const validator = new MarketDataSourceRegistry([
     { providerId: 'binance-spot', symbol: 'BTCUSDT', status: 'validated' },
@@ -54,10 +51,12 @@ describe('assertValidatedMarketDataSnapshot', () => {
   const snapshot = {
     provider: 'binance-spot',
     symbol: 'BTCUSDT',
-    candles: [{
-      openTime: new Date('2026-10-28T10:00:00.000Z'),
-      closeTime: new Date('2026-10-28T10:59:59.999Z'),
-    }],
+    candles: [
+      {
+        openTime: new Date('2026-10-28T10:00:00.000Z'),
+        closeTime: new Date('2026-10-28T10:59:59.999Z'),
+      },
+    ],
     freshness: { status: 'fresh' as const, checkedAt: '2026-10-28T12:00:00.000Z' },
   };
 
@@ -66,17 +65,26 @@ describe('assertValidatedMarketDataSnapshot', () => {
   });
 
   it('rejects unapproved sources, stale data, open candles, and empty candle sets', () => {
-    expect(() => assertValidatedMarketDataSnapshot(
-      { ...snapshot, provider: 'unknown-provider' }, validator,
-    )).toThrow('Market-data source is not validated');
-    expect(() => assertValidatedMarketDataSnapshot(
-      { ...snapshot, freshness: { ...snapshot.freshness, status: 'stale' } }, validator,
-    )).toThrow('Stale market data');
-    expect(() => assertValidatedMarketDataSnapshot(
-      { ...snapshot, candles: [{ ...snapshot.candles[0]!, closeTime: new Date('2026-10-28T12:00:01.000Z') }] },
-      validator,
-    )).toThrow('Open candles');
-    expect(() => assertValidatedMarketDataSnapshot({ ...snapshot, candles: [] }, validator))
-      .toThrow('at least one closed candle');
+    expect(() =>
+      assertValidatedMarketDataSnapshot({ ...snapshot, provider: 'unknown-provider' }, validator),
+    ).toThrow('Market-data source is not validated');
+    expect(() =>
+      assertValidatedMarketDataSnapshot(
+        { ...snapshot, freshness: { ...snapshot.freshness, status: 'stale' } },
+        validator,
+      ),
+    ).toThrow('Stale market data');
+    expect(() =>
+      assertValidatedMarketDataSnapshot(
+        {
+          ...snapshot,
+          candles: [{ ...snapshot.candles[0]!, closeTime: new Date('2026-10-28T12:00:01.000Z') }],
+        },
+        validator,
+      ),
+    ).toThrow('Open candles');
+    expect(() =>
+      assertValidatedMarketDataSnapshot({ ...snapshot, candles: [] }, validator),
+    ).toThrow('at least one closed candle');
   });
 });
