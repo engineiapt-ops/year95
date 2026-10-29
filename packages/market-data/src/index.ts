@@ -198,9 +198,10 @@ export function normalizeCandles(
     if (closeTimeMs <= openTimeMs) {
       throw new InvalidMarketDataError(`closeTime must be after openTime at candle ${index}`);
     }
-    if (closeTimeMs - openTimeMs > intervalMs) {
+    const candleDurationMs = closeTimeMs - openTimeMs;
+    if (candleDurationMs !== intervalMs && candleDurationMs !== intervalMs - 1) {
       throw new InvalidMarketDataError(
-        `Candle duration exceeds timeframe ${timeframe} at candle ${index}`,
+        `Candle duration does not match timeframe ${timeframe} at candle ${index}`,
       );
     }
 
