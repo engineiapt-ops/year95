@@ -150,7 +150,11 @@ function parseTimestamp(value: unknown, fieldName: string): number {
       : typeof value === 'string' && value.trim() !== ''
         ? Number(value)
         : Number.NaN;
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 0 ||
+    !Number.isFinite(new Date(parsed).getTime())
+  ) {
     throw new BinanceSpotProviderError(
       'INVALID_RESPONSE',
       `Binance returned an invalid ${fieldName} timestamp`,
