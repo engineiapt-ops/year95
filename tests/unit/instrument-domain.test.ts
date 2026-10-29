@@ -76,24 +76,9 @@ describe('instrument domain', () => {
   it('validates mapping provenance and does not trust the status flag alone', () => {
     expect(isMappingValidated(validatedMapping)).toBe(true);
     expect(isMappingValidated(pendingMapping)).toBe(false);
-    expect(
-      isMappingValidated({
-        ...validatedMapping,
-        providerSymbol: null,
-      }),
-    ).toBe(false);
-    expect(
-      isMappingValidated({
-        ...validatedMapping,
-        validatedAt: null,
-      }),
-    ).toBe(false);
-    expect(
-      isMappingValidated({
-        ...validatedMapping,
-        source: ' ',
-      }),
-    ).toBe(false);
+    expect(isMappingValidated({ ...validatedMapping, providerSymbol: null })).toBe(false);
+    expect(isMappingValidated({ ...validatedMapping, validatedAt: null })).toBe(false);
+    expect(isMappingValidated({ ...validatedMapping, source: ' ' })).toBe(false);
   });
 });
 
@@ -106,9 +91,7 @@ describe('timeframeDurationMs', () => {
 
   it('rejects unsupported runtime values, including inherited object keys', () => {
     for (const unsupported of ['15m', 'toString', 'constructor'] as const) {
-      expect(() => timeframeDurationMs(unsupported as Timeframe)).toThrow(
-        'Unsupported timeframe',
-      );
+      expect(() => timeframeDurationMs(unsupported as Timeframe)).toThrow('Unsupported timeframe');
     }
   });
 });
