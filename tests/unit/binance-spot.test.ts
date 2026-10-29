@@ -84,7 +84,7 @@ describe('Binance REST retry policy', () => {
     const transientProvider = new BinanceSpotProvider({
       baseUrl,
       now: () => new Date(checkedAtMs),
-      maxRetries: 1,
+      maxRetries: 2,
       retryBaseDelayMs: 20,
       retryMaxDelayMs: 40,
       randomImpl: () => 0.25,
@@ -93,19 +93,19 @@ describe('Binance REST retry policy', () => {
       },
       fetchImpl: async () => {
         transientCalls += 1;
-        return transientCalls === 1
-          ? jsonResponse({ message: 'rate limited' }, 429)
-          : jsonResponse([
-              rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
-            ]);
+        if (transientCalls === 1) return jsonResponse({ message: 'rate limited' }, 429);
+        if (transientCalls === 2) return jsonResponse({ message: 'temporarily unavailable' }, 503);
+        return jsonResponse([
+          rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
+        ]);
       },
     });
 
     await expect(
       transientProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
     ).resolves.toHaveLength(1);
-    expect(transientCalls).toBe(2);
-    expect(delays).toEqual([5]);
+    expect(transientCalls).toBe(3);
+    expect(delays).toEqual([5, 10]);
 
     let permanentCalls = 0;
     const permanentProvider = new BinanceSpotProvider({
@@ -125,7 +125,7 @@ describe('Binance REST retry policy', () => {
       permanentProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
     ).rejects.toMatchObject({ code: 'HTTP_ERROR', httpStatus: 400 });
     expect(permanentCalls).toBe(1);
-    expect(delays).toEqual([5]);
+    expect(delays).toEqual([5, 10]);
   });
 
   it('returns a typed request failure after exhausting network retries', async () => {
@@ -298,6 +298,23 @@ describe('Binance Spot adapter', () => {
     await expect(
       invalidDateTimestampProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
     ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+
+    const zeroDurationProvider = makeProvider(async () =>
+      jsonResponse([
+        [
+          Date.parse('2026-10-13T13:00:00.000Z'),
+          '100',
+          '110',
+          '90',
+          '105',
+          '12.5',
+          Date.parse('2026-10-13T13:00:00.000Z'),
+        ],
+      ]),
+    );
+    await expect(
+      zeroDurationProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
   });
 
   it('fails closed when latest candles are stale or absent', async () => {
@@ -368,6 +385,9 @@ describe('Binance Spot adapter', () => {
 
   it('enforces configuration and historical-query bounds', async () => {
     expect(() => new BinanceSpotProvider({ baseUrl: 'http://api.binance.test' })).toThrow(
+      BinanceSpotProviderError,
+    );
+    expect(() => new BinanceSpotProvider({ baseUrl, requestTimeoutMs: 0 })).toThrow(
       BinanceSpotProviderError,
     );
 
