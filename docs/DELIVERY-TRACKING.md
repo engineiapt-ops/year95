@@ -38,7 +38,6 @@ GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Sta
 
 GitHub delivery: implementation PR opened from this brief; acceptance is pending CI and review.
 
-
 ## PR #011 — Market-data contracts and quality
 
 Approved scope is implemented in [GitHub PR #53](https://github.com/engineiapt-ops/year95/pull/53); acceptance remains pending CI/review.
