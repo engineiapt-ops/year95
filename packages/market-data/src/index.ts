@@ -136,3 +136,14 @@ export function assertLatestCandleFresh(input: {
   }
   return freshness;
 }
+
+export {
+  MarketDataSourceRegistry,
+  assertValidatedMarketDataSnapshot,
+} from './provider-validation.js';
+export type {
+  MarketDataSourceApproval,
+  MarketDataSourceValidator,
+  MarketDataSnapshotCandidate,
+  ValidatedMarketDataSnapshot,
+} from './provider-validation.js';

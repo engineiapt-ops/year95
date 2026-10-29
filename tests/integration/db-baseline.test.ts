@@ -29,12 +29,16 @@ const plan = await loadMigrationPlan(rootDir);
 const indexCorrectionMigration = plan.migrations.find(
   ({ record }) => record.name === '028_reconcile_historical_indexes.sql',
 );
-if (!indexCorrectionMigration) {
-  throw new Error('Canonical index correction migration 028 is missing');
+const closedCandleMigration = plan.migrations.find(
+  ({ record }) => record.name === '030_market_data_closed_candles.sql',
+);
+if (!indexCorrectionMigration || !closedCandleMigration) {
+  throw new Error('Canonical index correction or closed-candle migration is missing');
 }
 const canonicalSchemaStatements: SqlStatement[] = [
   { sql: schemaSql },
   { sql: indexCorrectionMigration.sql },
+  { sql: closedCandleMigration.sql },
 ];
 const integrationTest = test.skipIf(!connectionString);
 
@@ -191,6 +195,7 @@ integrationTest(
         { name: '027_add_identity_repository_tables.sql', origin: 'migration' },
         { name: '028_reconcile_historical_indexes.sql', origin: 'migration' },
         { name: '029_benchmark_results_estrategia_widen.sql', origin: 'migration' },
+        { name: '030_market_data_closed_candles.sql', origin: 'migration' },
       ]);
       expect(applied.map((row) => row.name)).toContain('schema.sql');
 
