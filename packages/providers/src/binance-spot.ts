@@ -150,11 +150,7 @@ function parseTimestamp(value: unknown, fieldName: string): number {
       : typeof value === 'string' && value.trim() !== ''
         ? Number(value)
         : Number.NaN;
-  if (
-    !Number.isSafeInteger(parsed) ||
-    parsed < 0 ||
-    !Number.isFinite(new Date(parsed).getTime())
-  ) {
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || !Number.isFinite(new Date(parsed).getTime())) {
     throw new BinanceSpotProviderError(
       'INVALID_RESPONSE',
       `Binance returned an invalid ${fieldName} timestamp`,
@@ -344,10 +340,7 @@ export class BinanceSpotProvider implements MarketDataProvider {
   }
 
   private async waitBeforeRetry(attempt: number): Promise<void> {
-    const exponentialDelay = Math.min(
-      this.retryMaxDelayMs,
-      this.retryBaseDelayMs * 2 ** attempt,
-    );
+    const exponentialDelay = Math.min(this.retryMaxDelayMs, this.retryBaseDelayMs * 2 ** attempt);
     const sample = this.randomImpl();
     if (!Number.isFinite(sample) || sample < 0 || sample > 1) {
       throw new BinanceSpotProviderError(
