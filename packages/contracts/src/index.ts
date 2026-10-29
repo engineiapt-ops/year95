@@ -95,6 +95,19 @@ export const systemClock: Clock = Object.freeze({
 });
 
 export type {
+  CandleRepository,
+  HistoricalPriceQuery,
+  MarketDataCandle,
+  MarketDataTimeframe,
+  PersistClosedCandlesInput,
+  PriceProvider,
+  PriceQuery,
+  ProvenanceRecord,
+  QueryClosedCandlesInput,
+  StoredMarketCandle,
+} from './market-data.js';
+
+export type {
   AllowlistRepository,
   HealthRepository,
   Instrument,
