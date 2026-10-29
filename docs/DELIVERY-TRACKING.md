@@ -38,6 +38,16 @@ GitHub delivery: [PR #34](https://github.com/engineiapt-ops/year95/pull/34). Sta
 
 GitHub delivery: implementation PR opened from this brief; acceptance is pending CI and review.
 
+## PR #012 — Binance REST
+
+Implementation is tracked in [GitHub PR #54](https://github.com/engineiapt-ops/year95/pull/54); acceptance remains pending CI and review.
+
+- `packages/providers/src/binance-price.ts` implements the provider-neutral `PriceProvider` contract while retaining the existing `BinanceSpotProvider` API.
+- Each REST call is limited to 1,000 klines; history pages backwards and returns chronological closed candles. Transport failures/timeouts and transient HTTP responses use bounded exponential full jitter; permanent 4xx failures do not retry.
+- Retry clock/sleep/randomness and HTTP transport are injectable for deterministic tests. The contract suite uses a recorded fixture and a fake HTTP transport; CI never calls the live Binance endpoint.
+- Only the explicitly enabled BTCUSDT mapping and 1h/4h/1d timeframes remain supported.
+- No WebSocket, persistence, SQL, migration, ingestion scheduling, API route, decision or paper-trading changes are included.
+
 ## PR #011 — Market-data contracts and quality
 
 Implementation and acceptance evidence for this scope are tracked in [GitHub PR #53](https://github.com/engineiapt-ops/year95/pull/53); the PR history records the final CI and review results.
