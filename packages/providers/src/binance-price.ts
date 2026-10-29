@@ -4,10 +4,7 @@ import type {
   PriceProvider,
   PriceQuery,
 } from '@year95/contracts';
-import {
-  BinanceSpotProvider,
-  type BinanceSpotProviderOptions,
-} from './binance-spot.js';
+import { BinanceSpotProvider, type BinanceSpotProviderOptions } from './binance-spot.js';
 
 /** Options are supplied by the application boundary, including BINANCE_BASE_URL from loadConfig. */
 export type BinancePriceProviderOptions = BinanceSpotProviderOptions;
