@@ -104,6 +104,18 @@ describe('normalizeCandles', () => {
     ).toThrow(/Invalid candle timestamp/);
   });
 
+  it('rejects a single candle whose span exceeds its timeframe', () => {
+    const overlong = candle(
+      '2026-09-26T08:00:00.000Z',
+      0,
+      '2026-09-26T13:59:59.999Z',
+    );
+
+    expect(() => normalizeCandles([overlong], now, '1h')).toThrow(
+      /Candle duration exceeds timeframe/,
+    );
+  });
+
   it('detects missing intervals and rejects non-standard spacing', () => {
     expect(() =>
       normalizeCandles(
