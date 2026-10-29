@@ -44,8 +44,125 @@ function makeProvider(fetchImpl: typeof fetch, now = new Date(checkedAtMs)): Bin
     baseUrl,
     fetchImpl,
     now: () => new Date(now.getTime()),
+    maxRetries: 0,
   });
 }
+
+describe('Binance REST retry policy', () => {
+  it('retries transient network failures with exponential full jitter', async () => {
+    const delays: number[] = [];
+    let calls = 0;
+    const provider = new BinanceSpotProvider({
+      baseUrl,
+      now: () => new Date(checkedAtMs),
+      maxRetries: 2,
+      retryBaseDelayMs: 100,
+      retryMaxDelayMs: 500,
+      randomImpl: () => 0.5,
+      sleepImpl: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        if (calls < 3) throw new Error('temporary network failure');
+        return jsonResponse([
+          rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
+        ]);
+      },
+    });
+
+    const candles = await provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' });
+
+    expect(candles).toHaveLength(1);
+    expect(calls).toBe(3);
+    expect(delays).toEqual([50, 100]);
+  });
+
+  it('retries transient HTTP statuses but does not retry permanent 4xx errors', async () => {
+    const delays: number[] = [];
+    let transientCalls = 0;
+    const transientProvider = new BinanceSpotProvider({
+      baseUrl,
+      now: () => new Date(checkedAtMs),
+      maxRetries: 1,
+      retryBaseDelayMs: 20,
+      retryMaxDelayMs: 40,
+      randomImpl: () => 0.25,
+      sleepImpl: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      fetchImpl: async () => {
+        transientCalls += 1;
+        return transientCalls === 1
+          ? jsonResponse({ message: 'rate limited' }, 429)
+          : jsonResponse([
+              rawCandle('2026-10-13T13:00:00.000Z', '2026-10-13T13:59:59.999Z'),
+            ]);
+      },
+    });
+
+    await expect(
+      transientProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
+    ).resolves.toHaveLength(1);
+    expect(transientCalls).toBe(2);
+    expect(delays).toEqual([5]);
+
+    let permanentCalls = 0;
+    const permanentProvider = new BinanceSpotProvider({
+      baseUrl,
+      now: () => new Date(checkedAtMs),
+      maxRetries: 3,
+      sleepImpl: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      fetchImpl: async () => {
+        permanentCalls += 1;
+        return jsonResponse({ secret: 'must not be echoed' }, 400);
+      },
+    });
+
+    await expect(
+      permanentProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
+    ).rejects.toMatchObject({ code: 'HTTP_ERROR', httpStatus: 400 });
+    expect(permanentCalls).toBe(1);
+    expect(delays).toEqual([5]);
+  });
+
+  it('returns a typed request failure after exhausting network retries', async () => {
+    const delays: number[] = [];
+    const provider = new BinanceSpotProvider({
+      baseUrl,
+      maxRetries: 2,
+      retryBaseDelayMs: 100,
+      retryMaxDelayMs: 500,
+      randomImpl: () => 0.5,
+      sleepImpl: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      fetchImpl: async () => {
+        throw new Error('private transport detail must not escape');
+      },
+    });
+
+    await expect(
+      provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
+    ).rejects.toMatchObject({
+      name: 'BinanceSpotProviderError',
+      code: 'REQUEST_FAILED',
+      message: 'Binance Spot request failed or timed out',
+    });
+    expect(delays).toEqual([50, 100]);
+  });
+
+  it('rejects invalid retry configuration', () => {
+    expect(() => new BinanceSpotProvider({ baseUrl, maxRetries: 6 })).toThrow(
+      BinanceSpotProviderError,
+    );
+    expect(
+      () => new BinanceSpotProvider({ baseUrl, retryBaseDelayMs: 200, retryMaxDelayMs: 100 }),
+    ).toThrow(BinanceSpotProviderError);
+  });
+});
 
 describe('Binance Spot adapter', () => {
   it.each(['1h', '4h', '1d'] as const)(
@@ -163,6 +280,23 @@ describe('Binance Spot adapter', () => {
     );
     await expect(
       inconsistentProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+
+    const invalidDateTimestampProvider = makeProvider(async () =>
+      jsonResponse([
+        [
+          8_640_000_000_000_001,
+          '100',
+          '110',
+          '90',
+          '105',
+          '12.5',
+          8_640_000_000_000_999,
+        ],
+      ]),
+    );
+    await expect(
+      invalidDateTimestampProvider.getCandles({ symbol: 'BTCUSDT', timeframe: '1h' }),
     ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
   });
 
