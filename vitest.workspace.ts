@@ -94,7 +94,7 @@ export default defineWorkspace([
     },
     test: {
       name: 'e2e',
-      include: ['tests/e2e/**/*.test.ts', 'apps/web/tests/market-data-flow.test.tsx'],
+      include: ['tests/e2e/**/*.test.ts', 'tests/e2e/**/*.test.tsx'],
       environment: 'jsdom',
       globals: true,
     },
