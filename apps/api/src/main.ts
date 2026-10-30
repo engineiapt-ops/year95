@@ -102,7 +102,7 @@ function installGracefulShutdown(app: FastifyInstance): void {
 const invokedPath = process.argv[1];
 if (invokedPath !== undefined && resolve(invokedPath) === fileURLToPath(import.meta.url)) {
   void startApi({ ...process.env }).catch(() => {
-    process.stderr.write('YEAR95 API startup failed. Check runtime configuration.\\n');
+    process.stderr.write('YEAR95 API startup failed. Check runtime configuration.\n');
     process.exitCode = 1;
   });
 }
