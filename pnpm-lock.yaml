@@ -111,6 +111,10 @@ importers:
       '@year95/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.5
 
   packages/ai: {}
 
