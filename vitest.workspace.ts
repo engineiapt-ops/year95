@@ -90,6 +90,7 @@ export default defineWorkspace([
         '@testing-library/react': fileURLToPath(
           new URL('./apps/web/node_modules/@testing-library/react', import.meta.url),
         ),
+        react: fileURLToPath(new URL('./apps/web/node_modules/react/index.js', import.meta.url)),
       },
     },
     test: {
