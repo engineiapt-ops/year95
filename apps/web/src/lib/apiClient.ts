@@ -1,11 +1,18 @@
 import {
   healthResponseSchema,
   httpErrorResponseSchema,
+  marketCandlesResponseSchema,
+  marketDataQualityResponseSchema,
+  marketInstrumentsResponseSchema,
   meResponseSchema,
   readyResponseSchema,
   type HealthResponse,
-  type ReadyResponse,
+  type MarketDataApiTimeframe,
+  type MarketCandlesResponse,
+  type MarketDataQualityResponse,
+  type MarketInstrumentsResponse,
   type MeResponse,
+  type ReadyResponse,
 } from '@year95/contracts';
 
 type SafeParseResult<T> =
@@ -63,6 +70,33 @@ export class WebApiClient {
 
   getMe(): Promise<MeResponse> {
     return this.get('/v1/me', meResponseSchema);
+  }
+
+  getInstruments(): Promise<MarketInstrumentsResponse> {
+    return this.get('/v1/instruments', marketInstrumentsResponseSchema);
+  }
+
+  getMarketCandles(
+    symbol: string,
+    timeframe: MarketDataApiTimeframe,
+    limit = 300,
+  ): Promise<MarketCandlesResponse> {
+    const query = new URLSearchParams({ tf: timeframe, limit: String(limit) });
+    return this.get(
+      `/v1/market/${encodeURIComponent(symbol)}/candles?${query.toString()}`,
+      marketCandlesResponseSchema,
+    );
+  }
+
+  getMarketQuality(
+    symbol: string,
+    timeframe: MarketDataApiTimeframe,
+  ): Promise<MarketDataQualityResponse> {
+    const query = new URLSearchParams({ tf: timeframe });
+    return this.get(
+      `/v1/market/${encodeURIComponent(symbol)}/quality?${query.toString()}`,
+      marketDataQualityResponseSchema,
+    );
   }
 
   private async get<T>(
@@ -146,3 +180,8 @@ export class WebApiClient {
     return parsed.data;
   }
 }
+
+export type MarketDataApi = Pick<
+  WebApiClient,
+  'getInstruments' | 'getMarketCandles' | 'getMarketQuality'
+>;

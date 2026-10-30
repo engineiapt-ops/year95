@@ -29,6 +29,9 @@ COPY --from=build --chown=node:node /app/packages/contracts/package.json ./packa
 COPY --from=build --chown=node:node /app/packages/contracts/node_modules ./packages/contracts/node_modules
 COPY --from=build --chown=node:node /app/packages/contracts/dist ./packages/contracts/dist
 
+COPY --from=build --chown=node:node /app/packages/market-data/package.json ./packages/market-data/package.json
+COPY --from=build --chown=node:node /app/packages/market-data/dist ./packages/market-data/dist
+
 COPY --from=build --chown=node:node /app/packages/persistence/package.json ./packages/persistence/package.json
 COPY --from=build --chown=node:node /app/packages/persistence/node_modules ./packages/persistence/node_modules
 COPY --from=build --chown=node:node /app/packages/persistence/dist ./packages/persistence/dist

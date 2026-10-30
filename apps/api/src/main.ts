@@ -2,8 +2,17 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { loadConfig, type ConfigEnv } from '@year95/config';
-import { PgAllowlistRepository, PgHealthRepository, createPgPool } from '@year95/persistence';
+import { systemClock } from '@year95/contracts';
+import { MarketDataSourceRegistry } from '@year95/market-data';
+import {
+  PgAllowlistRepository,
+  PgHealthRepository,
+  PgInstrumentRepository,
+  PgMarketDataRepository,
+  createPgPool,
+} from '@year95/persistence';
 import { buildApp } from './app.js';
+import { registerMarketDataRoutes } from './market-data-routes.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -17,6 +26,9 @@ export async function startApi(env: ConfigEnv): Promise<void> {
         ...(config.DATABASE_CA_CERT_PEM ? { caCertPem: config.DATABASE_CA_CERT_PEM } : {}),
       })
     : undefined;
+  const sourceValidator = new MarketDataSourceRegistry([
+    { providerId: 'binance-spot', symbol: 'BTCUSDT', status: 'validated' },
+  ]);
   const app = buildApp({
     config,
     ...(pool
@@ -27,6 +39,21 @@ export async function startApi(env: ConfigEnv): Promise<void> {
           },
         }
       : {}),
+    registerV1Routes(v1) {
+      registerMarketDataRoutes(
+        v1,
+        pool
+          ? {
+              instrumentRepository: new PgInstrumentRepository(pool),
+              candleRepository: new PgMarketDataRepository(pool, sourceValidator, () =>
+                systemClock.now(),
+              ),
+              sourceValidator,
+              clock: systemClock,
+            }
+          : undefined,
+      );
+    },
   });
 
   if (pool) {

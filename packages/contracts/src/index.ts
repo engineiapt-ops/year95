@@ -113,3 +113,20 @@ export type {
   Instrument,
   InstrumentRepository,
 } from './repositories.js';
+
+export {
+  marketDataTimeframeSchema,
+  marketDataInstrumentSchema,
+  marketInstrumentsResponseSchema,
+  marketDataCandleSchema,
+  marketCandlesResponseSchema,
+  marketDataQualityResponseSchema,
+} from './market-data-api.js';
+export type {
+  MarketDataApiTimeframe,
+  MarketDataInstrumentResponse,
+  MarketInstrumentsResponse,
+  MarketDataCandleResponse,
+  MarketCandlesResponse,
+  MarketDataQualityResponse,
+} from './market-data-api.js';

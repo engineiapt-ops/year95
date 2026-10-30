@@ -7,6 +7,7 @@ on:
       - packages/config/**
       - packages/contracts/**
       - packages/persistence/**
+      - packages/market-data/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
@@ -19,6 +20,7 @@ on:
       - packages/config/**
       - packages/contracts/**
       - packages/persistence/**
+      - packages/market-data/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
@@ -38,3 +40,10 @@ jobs:
 
       - name: Build production API image
         run: docker build --file apps/api/Dockerfile --tag year95-api:${{ github.sha }} .
+
+      - name: Verify API runtime workspace dependencies
+        run: |
+          docker run --rm --entrypoint node \
+            "year95-api:${{ github.sha }}" \
+            --input-type=module \
+            -e "await import('./apps/api/dist/main.js'); console.log('API runtime workspace dependencies resolved.');"

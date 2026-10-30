@@ -23,7 +23,7 @@ export default defineWorkspace([
     },
     test: {
       name: 'component',
-      include: ['apps/web/tests/**/*.test.tsx'],
+      include: ['apps/web/tests/web-shell.test.tsx'],
       environment: 'jsdom',
       globals: true,
     },
@@ -72,10 +72,31 @@ export default defineWorkspace([
     },
   },
   {
+    resolve: {
+      alias: {
+        '@year95/config': fileURLToPath(new URL('./packages/config/src/index.ts', import.meta.url)),
+        '@year95/contracts': fileURLToPath(
+          new URL('./packages/contracts/src/index.ts', import.meta.url),
+        ),
+        '@year95/market-data': fileURLToPath(
+          new URL('./packages/market-data/src/index.ts', import.meta.url),
+        ),
+        '@year95/persistence': fileURLToPath(
+          new URL('./packages/persistence/src/index.ts', import.meta.url),
+        ),
+        '@year95/providers': fileURLToPath(
+          new URL('./packages/providers/src/index.ts', import.meta.url),
+        ),
+        '@testing-library/react': fileURLToPath(
+          new URL('./apps/web/node_modules/@testing-library/react', import.meta.url),
+        ),
+      },
+    },
     test: {
       name: 'e2e',
-      include: ['tests/e2e/**/*.test.ts'],
-      environment: 'node',
+      include: ['tests/e2e/**/*.test.ts', 'tests/e2e/**/*.test.tsx'],
+      environment: 'jsdom',
+      globals: true,
     },
   },
 ]);

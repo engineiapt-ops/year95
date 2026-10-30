@@ -10,13 +10,14 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "typecheck": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json --noEmit",
-    "build": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json",
     "start": "node dist/main.js"
   },
   "dependencies": {
     "@year95/config": "workspace:*",
     "@year95/contracts": "workspace:*",
+    "@year95/market-data": "workspace:*",
     "@year95/persistence": "workspace:*",
     "fastify": "5.12.5",
     "jose": "6.2.12"
