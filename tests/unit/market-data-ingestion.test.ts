@@ -76,7 +76,7 @@ describe('runMarketDataIngestion', () => {
       persistedCandles: 3,
       dataAsOf: c3.closeTime.toISOString(),
     });
-    expect(repository.records).toHaveLength(3);
+    expect(repository.records.size).toBe(3);
 
     const second = await runMarketDataIngestion(options, dependencies);
     expect(second.timeframes[0]?.persistedCandles).toBe(3);
