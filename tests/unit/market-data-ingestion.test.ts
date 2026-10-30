@@ -25,6 +25,11 @@ const c3: MarketDataCandle = {
   closeTime: new Date('2026-10-30T03:59:59.999Z'),
   open: 102, high: 104, low: 101, close: 103, volume: 15,
 };
+const c4: MarketDataCandle = {
+  openTime: new Date('2026-10-30T04:00:00.000Z'),
+  closeTime: new Date('2026-10-30T04:59:59.999Z'),
+  open: 102, high: 105, low: 101, close: 104, volume: 16,
+};
 
 function memoryRepository(): CandleRepository & { readonly records: Map<string, StoredMarketCandle> } {
   const records = new Map<string, StoredMarketCandle>();

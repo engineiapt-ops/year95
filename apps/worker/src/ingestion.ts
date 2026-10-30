@@ -137,7 +137,7 @@ export async function runMarketDataIngestion(
       }
 
       normalizedHistory = normalizeCandles(history, now, timeframe, {
-        maxCandles: requestedHistoryCandles + INCREMENTAL_CANDLE_LIMIT,
+        maxCandles: requestedHistoryCandles + INITIAL_INCREMENTAL_CANDLE_LIMIT,
       });
       if (normalizedHistory.length !== requestedHistoryCandles) {
         throw new Error(
@@ -160,7 +160,9 @@ export async function runMarketDataIngestion(
         ? normalizeCandles([checkpoint, ...incremental], now, timeframe, {
             maxCandles: HISTORY_CHUNK_SIZE + 1,
           })
-        : [checkpoint]
+        : normalizeCandles([checkpoint], now, timeframe, {
+          maxCandles: HISTORY_CHUNK_SIZE + 1,
+        })
       : normalizeCandles([...normalizedHistory, ...incremental], now, timeframe, {
           maxCandles: requestedHistoryCandles + INITIAL_INCREMENTAL_CANDLE_LIMIT,
         });
