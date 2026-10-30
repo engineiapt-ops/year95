@@ -87,6 +87,9 @@ export default defineWorkspace([
         '@year95/providers': fileURLToPath(
           new URL('./packages/providers/src/index.ts', import.meta.url),
         ),
+        '@testing-library/react': fileURLToPath(
+          new URL('./apps/web/node_modules/@testing-library/react', import.meta.url),
+        ),
       },
     },
     test: {
