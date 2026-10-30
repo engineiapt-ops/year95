@@ -151,11 +151,10 @@ describe('market-data ingestion -> API -> authenticated dashboard', () => {
         exp: nowSeconds + 300,
       }),
     ].join('.');
-    const signature = createSign('RSA-SHA256')
-      .update(unsignedToken)
-      .end()
-      .sign(privateKey)
-      .toString('base64url');
+    const signer = createSign('RSA-SHA256');
+    signer.update(unsignedToken);
+    signer.end();
+    const signature = signer.sign(privateKey).toString('base64url');
     const token = `${unsignedToken}.${signature}`;
 
     activeApp = buildApp({
