@@ -210,3 +210,143 @@ button:focus-visible {
     align-items: center;
   }
 }
+
+.market-data-section {
+  margin-top: 2rem;
+  border: 1px solid #28384e;
+  border-radius: 14px;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: #101a2a;
+}
+.market-data-header,
+.market-data-controls,
+.market-data-meta,
+.market-data-chart__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.market-data-header h2 {
+  margin: 0.2rem 0 0.4rem;
+}
+.market-data-badge {
+  border: 1px solid #465770;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.market-data-badge--fresh {
+  border-color: #287c60;
+  color: #79e0b4;
+}
+.market-data-badge--stale,
+.market-data-badge--no_data {
+  border-color: #964d58;
+  color: #ffb7be;
+}
+.market-data-controls {
+  justify-content: flex-start;
+  margin: 1.25rem 0;
+}
+.market-data-controls label {
+  display: grid;
+  gap: 0.4rem;
+  color: #b6c3d7;
+  font-size: 0.82rem;
+}
+.market-data-controls select {
+  min-width: 170px;
+  border: 1px solid #354258;
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  color: #f5f7fb;
+  background: #111c2d;
+  font: inherit;
+}
+.market-data-controls select:focus-visible {
+  outline: 2px solid #8cb7ff;
+  outline-offset: 2px;
+}
+.market-data-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: #94a5bc;
+  font-size: 0.8rem;
+}
+.market-data-chart {
+  margin-top: 1rem;
+  border: 1px solid #26364b;
+  border-radius: 10px;
+  padding: 1rem;
+  color: #8cb7ff;
+  background: #0d1726;
+}
+.market-data-chart__heading {
+  color: #b6c3d7;
+  font-size: 0.82rem;
+}
+.market-data-chart__heading strong {
+  color: #f6f8fc;
+  font-variant-numeric: tabular-nums;
+}
+.market-data-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 0.5rem;
+  overflow: visible;
+}
+.market-data-block {
+  margin: 1rem 0;
+  border: 1px solid #964d58;
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  color: #ffb7be;
+  background: #5a232d40;
+}
+.market-data-block p {
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+}
+.market-data-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+.market-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.market-data-table th,
+.market-data-table td {
+  padding: 0.65rem 0.7rem;
+  border-bottom: 1px solid #28384e;
+  text-align: right;
+  white-space: nowrap;
+}
+.market-data-table th:first-child,
+.market-data-table td:first-child {
+  text-align: left;
+}
+.market-data-table th {
+  color: #94a5bc;
+  font-weight: 600;
+}
+.market-data-table td {
+  color: #d9e2f1;
+}
+@media (max-width: 760px) {
+  .market-data-header {
+    align-items: flex-start;
+  }
+  .market-data-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .market-data-controls select {
+    width: 100%;
+  }
+}
