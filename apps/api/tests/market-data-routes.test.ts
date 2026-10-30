@@ -9,7 +9,7 @@ import type {
 } from '@year95/contracts';
 import { marketCandlesResponseSchema, marketDataQualityResponseSchema, marketInstrumentsResponseSchema } from '@year95/contracts';
 import type { MarketDataSourceValidator } from '@year95/market-data';
-import { registerMarketDataRoutes } from '../../apps/api/src/market-data-routes.js';
+import { registerMarketDataRoutes } from '../src/market-data-routes.js';
 
 const instrument: Instrument = {
   symbol: 'BTCUSDT',
