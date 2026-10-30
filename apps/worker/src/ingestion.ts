@@ -168,7 +168,7 @@ export async function runMarketDataIngestion(
       requestedHistoryCandles,
       backfillPerformed,
       historyCandles: normalizedHistory.length,
-      incrementalCandles: newCandles.length,
+      incrementalCandles: checkpoint ? newCandles.length : Math.max(0, combined.length - normalizedHistory.length),
       persistedCandles,
       dataAsOf: latest.closeTime.toISOString(),
     });
