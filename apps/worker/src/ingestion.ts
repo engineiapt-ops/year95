@@ -16,7 +16,12 @@ export const DEFAULT_HISTORY_CANDLES: Readonly<Record<MarketDataTimeframe, numbe
 
 const HISTORY_CHUNK_SIZE = 1_000;
 const HISTORY_DELAY_MS = 150;
-const INCREMENTAL_CANDLE_LIMIT = 2;
+const INITIAL_INCREMENTAL_CANDLE_LIMIT = 2;
+const TIMEFRAME_DURATION_MS: Readonly<Record<MarketDataTimeframe, number>> = Object.freeze({
+  '1h': 60 * 60 * 1_000,
+  '4h': 4 * 60 * 60 * 1_000,
+  '1d': 24 * 60 * 60 * 1_000,
+});
 const MAX_HISTORY_CANDLES = 50_000;
 
 export interface MarketDataIngestionDependencies {
@@ -144,13 +149,21 @@ export async function runMarketDataIngestion(
     const incremental = await dependencies.provider.getCandles({
       instrument: symbol,
       timeframe,
-      limit: INCREMENTAL_CANDLE_LIMIT,
+      limit: checkpoint ? HISTORY_CHUNK_SIZE : INITIAL_INCREMENTAL_CANDLE_LIMIT,
+      ...(checkpoint
+        ? { startTime: checkpoint.openTime.getTime() + TIMEFRAME_DURATION_MS[timeframe] }
+        : {}),
       endTime: nowMs,
     });
-    const seed = checkpoint ? [checkpoint] : normalizedHistory;
-    const combined = normalizeCandles([...seed, ...incremental], now, timeframe, {
-      maxCandles: requestedHistoryCandles + INCREMENTAL_CANDLE_LIMIT + 1,
-    });
+    const combined = checkpoint
+      ? incremental.length > 0
+        ? normalizeCandles([checkpoint, ...incremental], now, timeframe, {
+            maxCandles: HISTORY_CHUNK_SIZE + 1,
+          })
+        : [checkpoint]
+      : normalizeCandles([...normalizedHistory, ...incremental], now, timeframe, {
+          maxCandles: requestedHistoryCandles + INITIAL_INCREMENTAL_CANDLE_LIMIT,
+        });
     const newCandles = checkpoint
       ? combined.filter((candle) => candle.openTime.getTime() > checkpoint.openTime.getTime())
       : combined;

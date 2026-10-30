@@ -52,7 +52,9 @@ describe('runMarketDataIngestion', () => {
   it('backfills, adds the latest closed candle and remains idempotent on repeated runs', async () => {
     const repository = memoryRepository();
     const getHistory = vi.fn(async () => [c1, c2]);
-    const getCandles = vi.fn(async () => [c2, c3]);
+    const getCandles = vi.fn(async (query: Parameters<PriceProvider['getCandles']>[0]) =>
+      query.startTime === undefined ? [c2, c3] : [],
+    );
     const provider: PriceProvider = {
       id: 'binance-spot',
       getHistory,
@@ -84,6 +86,79 @@ describe('runMarketDataIngestion', () => {
     expect(repository.records.size).toBe(3);
     expect(getHistory).toHaveBeenCalledTimes(1);
     expect(getCandles).toHaveBeenCalledTimes(2);
+  });
+
+
+  it('catches up every closed candle missed while the worker was offline', async () => {
+    const repository = memoryRepository();
+    await repository.persistClosedCandles({
+      symbol: 'BTCUSDT',
+      timeframe: '1h',
+      provider: 'binance-spot',
+      candles: [c1],
+    });
+    const recoveryNow = new Date('2026-10-30T05:00:00.000Z');
+    const getHistory = vi.fn(async () => []);
+    const getCandles = vi.fn(async () => [c2, c3, c4]);
+    const provider: PriceProvider = { id: 'binance-spot', getHistory, getCandles };
+    const clock: Clock = { now: () => new Date(recoveryNow) };
+    const sourceValidator: MarketDataSourceValidator = {
+      assertValidated: (providerId, symbol) => {
+        if (providerId !== 'binance-spot' || symbol !== 'BTCUSDT') {
+          throw new Error('source not validated');
+        }
+      },
+    };
+
+    const result = await runMarketDataIngestion(
+      { timeframes: ['1h'], historyCandles: { '1h': 2 } },
+      { clock, provider, repository, sourceValidator },
+    );
+
+    expect(result.timeframes[0]).toMatchObject({
+      backfillPerformed: false,
+      historyCandles: 0,
+      incrementalCandles: 3,
+      persistedCandles: 3,
+      dataAsOf: c4.closeTime.toISOString(),
+    });
+    expect(getHistory).not.toHaveBeenCalled();
+    expect(getCandles).toHaveBeenCalledOnce();
+    expect(getCandles).toHaveBeenCalledWith({
+      instrument: 'BTCUSDT',
+      timeframe: '1h',
+      limit: 1_000,
+      startTime: c2.openTime.getTime(),
+      endTime: recoveryNow.getTime(),
+    });
+    expect(repository.records.size).toBe(4);
+  });
+
+  it('does not persist incremental candles when an unexpected gap remains', async () => {
+    const repository = memoryRepository();
+    await repository.persistClosedCandles({
+      symbol: 'BTCUSDT',
+      timeframe: '1h',
+      provider: 'binance-spot',
+      candles: [c1],
+    });
+    const provider: PriceProvider = {
+      id: 'binance-spot',
+      getHistory: async () => [],
+      getCandles: async () => [c3, c4],
+    };
+    const sourceValidator: MarketDataSourceValidator = { assertValidated: () => undefined };
+
+    await expect(runMarketDataIngestion(
+      { timeframes: ['1h'], historyCandles: { '1h': 2 } },
+      {
+        clock: { now: () => new Date('2026-10-30T05:00:00.000Z') },
+        provider,
+        repository,
+        sourceValidator,
+      },
+    )).rejects.toThrow('Market-data gap detected');
+    expect(repository.records.size).toBe(1);
   });
 
   it('fails before provider access when the provider/instrument pair is not validated', async () => {

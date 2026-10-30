@@ -20,11 +20,11 @@ Argumentos disponíveis:
 - `--candles N` para substituir a quantidade histórica pedida nos timeframes selecionados.
 - `--candles-1h N`, `--candles-4h N` e `--candles-1d N` para configurar cada timeframe separadamente.
 
-Valores padrão: 5.000 candles em 1h, 5.000 em 4h e 3.000 em 1d. O backfill diário usa 3.000 em vez do padrão isolado de 5.000 do backfill legado; esta configuração é explícita e pode ser substituída pelo operador. Cada backfill exige que o provider retorne exatamente a quantidade solicitada. A coleta incremental consulta os dois candles mais recentes e persiste apenas candles fechados.
+Valores padrão: 5.000 candles em 1h, 5.000 em 4h e 3.000 em 1d. O backfill diário usa 3.000 em vez do padrão isolado de 5.000 do backfill legado; esta configuração é explícita e pode ser substituída pelo operador. Cada backfill exige que o provider retorne exatamente a quantidade solicitada.
 
-Quando não existem candles persistidos para um timeframe, a primeira execução faz o backfill completo. As execuções seguintes usam o último candle persistido como checkpoint e buscam somente os dois candles mais recentes; apenas candles com open time posterior ao checkpoint são gravados. Se o incremental não contiver uma sequência contínua a partir do checkpoint, a normalização falha e a ingestão é bloqueada em vez de presumir dados ausentes.
+Quando não existem candles persistidos para um timeframe, a primeira execução faz o backfill completo. Nas execuções seguintes, o último candle persistido é o checkpoint: o worker consulta candles a partir do próximo open time esperado, com limite de até 1.000 candles por execução incremental. Assim, uma interrupção não faz o worker saltar diretamente para as duas velas mais recentes. Se houver mais de 1.000 candles em atraso, execuções seguintes continuam a partir do último candle persistido; durante a recuperação, a qualidade continua stale e a API/dashboard bloqueiam o uso dos dados até alcançar o candle atual. Se a resposta contiver uma lacuna, OHLC inválido ou duplicados conflitantes, a normalização falha e nada desse lote é persistido.
 
-A execução usa um `Clock` injetado, paginação histórica de até 1.000 candles por pedido e intervalo de 150 ms entre páginas. A normalização rejeita OHLC inválido, lacunas e duplicados conflitantes. A persistência usa a chave natural existente para permitir reexecução sem duplicar candles.
+A execução usa um `Clock` injetado, paginação histórica de até 1.000 candles por pedido e intervalo de 150 ms entre páginas de backfill. A normalização rejeita OHLC inválido, lacunas e duplicados conflitantes. A persistência usa a chave natural existente para permitir reexecução sem duplicar candles.
 
 ## API autenticada
 
