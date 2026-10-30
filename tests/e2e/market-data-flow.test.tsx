@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import type {
   CandleRepository,
@@ -167,6 +167,12 @@ describe('market-data ingestion -> API -> authenticated dashboard', () => {
       },
     });
     await activeApp.ready();
+
+    const anonymousResponse = await activeApp.inject({
+      method: 'GET',
+      url: '/v1/instruments',
+    });
+    expect(anonymousResponse.statusCode).toBe(401);
 
     const fetchImpl: FetchLike = async (input, init) => {
       const url = new URL(String(input));
