@@ -84,7 +84,7 @@ export function MarketDataSection({ api }: MarketDataSectionProps) {
     return () => {
       active = false;
     };
-  }, [api, symbol]);
+  }, [api]);
 
   useEffect(() => {
     let active = true;
