@@ -7,7 +7,11 @@ import type {
   InstrumentRepository,
   StoredMarketCandle,
 } from '@year95/contracts';
-import { marketCandlesResponseSchema, marketDataQualityResponseSchema, marketInstrumentsResponseSchema } from '@year95/contracts';
+import {
+  marketCandlesResponseSchema,
+  marketDataQualityResponseSchema,
+  marketInstrumentsResponseSchema,
+} from '@year95/contracts';
 import type { MarketDataSourceValidator } from '@year95/market-data';
 import { registerMarketDataRoutes } from '../src/market-data-routes.js';
 
@@ -49,24 +53,39 @@ describe('market-data HTTP contracts', () => {
     let stored: readonly StoredMarketCandle[] = [freshCandle];
     const instrumentRepository: InstrumentRepository = {
       listEnabled: async () => [instrument],
-      findBySymbol: async (symbol) => symbol === 'BTCUSDT' ? instrument : null,
+      findBySymbol: async (symbol) => (symbol === 'BTCUSDT' ? instrument : null),
     };
     const candleRepository: CandleRepository = {
       persistClosedCandles: async () => 0,
-      queryClosedCandles: async (input) => stored
-        .filter((candle) => candle.symbol === input.symbol && candle.provider === input.provider && candle.timeframe === input.timeframe)
-        .slice(- (input.limit ?? 500)),
+      queryClosedCandles: async (input) =>
+        stored
+          .filter(
+            (candle) =>
+              candle.symbol === input.symbol &&
+              candle.provider === input.provider &&
+              candle.timeframe === input.timeframe,
+          )
+          .slice(-(input.limit ?? 500)),
     };
     const sourceValidator: MarketDataSourceValidator = {
       assertValidated: (providerId, symbol) => {
-        if (providerId !== 'binance-spot' || symbol !== 'BTCUSDT') throw new Error('source not validated');
+        if (providerId !== 'binance-spot' || symbol !== 'BTCUSDT')
+          throw new Error('source not validated');
       },
     };
     const clock: Clock = { now: () => new Date('2026-10-30T03:00:00.000Z') };
     const app = Fastify();
-    app.register(async (v1) => {
-      registerMarketDataRoutes(v1, { instrumentRepository, candleRepository, sourceValidator, clock });
-    }, { prefix: '/v1' });
+    app.register(
+      async (v1) => {
+        registerMarketDataRoutes(v1, {
+          instrumentRepository,
+          candleRepository,
+          sourceValidator,
+          clock,
+        });
+      },
+      { prefix: '/v1' },
+    );
     await app.ready();
 
     try {
@@ -76,20 +95,30 @@ describe('market-data HTTP contracts', () => {
         items: [{ symbol: 'BTCUSDT', providerId: 'binance-spot' }],
       });
 
-      const candles = await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/candles?tf=1h&limit=10' });
+      const candles = await app.inject({
+        method: 'GET',
+        url: '/v1/market/BTCUSDT/candles?tf=1h&limit=10',
+      });
       expect(candles.statusCode).toBe(200);
       expect(marketCandlesResponseSchema.parse(candles.json()).candles).toHaveLength(1);
 
       const quality = await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/quality?tf=1h' });
       expect(quality.statusCode).toBe(200);
       expect(marketDataQualityResponseSchema.parse(quality.json())).toMatchObject({
-        status: 'fresh', blocked: false, blockReason: null,
+        status: 'fresh',
+        blocked: false,
+        blockReason: null,
       });
 
       stored = [];
-      const emptyQuality = await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/quality?tf=1h' });
+      const emptyQuality = await app.inject({
+        method: 'GET',
+        url: '/v1/market/BTCUSDT/quality?tf=1h',
+      });
       expect(marketDataQualityResponseSchema.parse(emptyQuality.json())).toMatchObject({
-        status: 'no_data', blocked: true, blockReason: 'NO_CLOSED_CANDLES',
+        status: 'no_data',
+        blocked: true,
+        blockReason: 'NO_CLOSED_CANDLES',
       });
     } finally {
       await app.close();
@@ -103,7 +132,7 @@ describe('market-data HTTP contracts', () => {
     };
     const instrumentRepository: InstrumentRepository = {
       listEnabled: async () => [instrument],
-      findBySymbol: async (symbol) => symbol === 'BTCUSDT' ? instrument : null,
+      findBySymbol: async (symbol) => (symbol === 'BTCUSDT' ? instrument : null),
     };
     const candleRepository: CandleRepository = {
       persistClosedCandles: async () => 0,
@@ -111,24 +140,36 @@ describe('market-data HTTP contracts', () => {
     };
     const sourceValidator: MarketDataSourceValidator = { assertValidated: () => undefined };
     const app = Fastify();
-    app.register(async (v1) => {
-      registerMarketDataRoutes(v1, {
-        instrumentRepository,
-        candleRepository,
-        sourceValidator,
-        clock: { now: () => new Date('2026-10-30T03:00:00.000Z') },
-      });
-    }, { prefix: '/v1' });
+    app.register(
+      async (v1) => {
+        registerMarketDataRoutes(v1, {
+          instrumentRepository,
+          candleRepository,
+          sourceValidator,
+          clock: { now: () => new Date('2026-10-30T03:00:00.000Z') },
+        });
+      },
+      { prefix: '/v1' },
+    );
     await app.ready();
 
     try {
       const quality = await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/quality?tf=1h' });
       expect(marketDataQualityResponseSchema.parse(quality.json())).toMatchObject({
-        status: 'stale', blocked: true, blockReason: 'STALE_MARKET_DATA',
+        status: 'stale',
+        blocked: true,
+        blockReason: 'STALE_MARKET_DATA',
       });
-      expect((await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/quality?tf=15m' })).statusCode).toBe(400);
-      expect((await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/candles?tf=1h&limit=1001' })).statusCode).toBe(400);
-      expect((await app.inject({ method: 'GET', url: '/v1/market/ETHUSDT/candles?tf=1h' })).statusCode).toBe(404);
+      expect(
+        (await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/quality?tf=15m' })).statusCode,
+      ).toBe(400);
+      expect(
+        (await app.inject({ method: 'GET', url: '/v1/market/BTCUSDT/candles?tf=1h&limit=1001' }))
+          .statusCode,
+      ).toBe(400);
+      expect(
+        (await app.inject({ method: 'GET', url: '/v1/market/ETHUSDT/candles?tf=1h' })).statusCode,
+      ).toBe(404);
     } finally {
       await app.close();
     }

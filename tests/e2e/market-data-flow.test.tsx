@@ -47,18 +47,30 @@ const history: readonly MarketDataCandle[] = [
   {
     openTime: new Date('2026-10-30T01:00:00.000Z'),
     closeTime: new Date('2026-10-30T01:59:59.999Z'),
-    open: 100, high: 102, low: 99, close: 101, volume: 10,
+    open: 100,
+    high: 102,
+    low: 99,
+    close: 101,
+    volume: 10,
   },
   {
     openTime: new Date('2026-10-30T02:00:00.000Z'),
     closeTime: new Date('2026-10-30T02:59:59.999Z'),
-    open: 101, high: 103, low: 100, close: 102, volume: 12,
+    open: 101,
+    high: 103,
+    low: 100,
+    close: 102,
+    volume: 12,
   },
 ];
 const newClosedCandle: MarketDataCandle = {
   openTime: new Date('2026-10-30T03:00:00.000Z'),
   closeTime: new Date('2026-10-30T03:59:59.999Z'),
-  open: 102, high: 104, low: 101, close: 103, volume: 15,
+  open: 102,
+  high: 104,
+  low: 101,
+  close: 103,
+  volume: 15,
 };
 
 let activeApp: ReturnType<typeof buildApp> | undefined;
@@ -71,7 +83,7 @@ afterEach(async () => {
   }
   if (jwksServer) {
     await new Promise<void>((resolve, reject) => {
-      jwksServer?.close((error) => error ? reject(error) : resolve());
+      jwksServer?.close((error) => (error ? reject(error) : resolve()));
     });
     jwksServer = undefined;
   }
@@ -89,23 +101,31 @@ describe('market-data ingestion -> API -> authenticated dashboard', () => {
       async persistClosedCandles(input) {
         for (const candle of input.candles) {
           records.set(`${input.symbol}:${input.timeframe}:${candle.openTime.toISOString()}`, {
-            ...candle, symbol: input.symbol, timeframe: input.timeframe, provider: input.provider,
+            ...candle,
+            symbol: input.symbol,
+            timeframe: input.timeframe,
+            provider: input.provider,
           });
         }
         return input.candles.length;
       },
       async queryClosedCandles(input) {
         return [...records.values()]
-          .filter((candle) => candle.symbol === input.symbol &&
-            candle.provider === input.provider && candle.timeframe === input.timeframe)
+          .filter(
+            (candle) =>
+              candle.symbol === input.symbol &&
+              candle.provider === input.provider &&
+              candle.timeframe === input.timeframe,
+          )
           .sort((left, right) => left.openTime.getTime() - right.openTime.getTime())
           .slice(-(input.limit ?? 500));
       },
     };
     const provider: PriceProvider = {
       id: 'binance-spot',
-      getHistory: async ({ timeframe }) => timeframe === '1h' ? history : [],
-      getCandles: async ({ timeframe }) => timeframe === '1h' ? [history[1]!, newClosedCandle] : [],
+      getHistory: async ({ timeframe }) => (timeframe === '1h' ? history : []),
+      getCandles: async ({ timeframe }) =>
+        timeframe === '1h' ? [history[1]!, newClosedCandle] : [],
     };
     const clock = { now: () => new Date(currentTime) };
     const ingestionOptions = {
@@ -114,22 +134,34 @@ describe('market-data ingestion -> API -> authenticated dashboard', () => {
       historyCandles: { '1h': 2 },
     };
 
-    await runMarketDataIngestion(ingestionOptions, { clock, provider, repository, sourceValidator });
+    await runMarketDataIngestion(ingestionOptions, {
+      clock,
+      provider,
+      repository,
+      sourceValidator,
+    });
     expect(records.size).toBe(3);
-    await runMarketDataIngestion(ingestionOptions, { clock, provider, repository, sourceValidator });
+    await runMarketDataIngestion(ingestionOptions, {
+      clock,
+      provider,
+      repository,
+      sourceValidator,
+    });
     expect(records.size).toBe(3);
 
     const instrumentRepository: InstrumentRepository = {
       listEnabled: async () => [instrument],
-      findBySymbol: async (symbol) => symbol === 'BTCUSDT' ? instrument : null,
+      findBySymbol: async (symbol) => (symbol === 'BTCUSDT' ? instrument : null),
     };
     const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const publicJwk = publicKey.export({ format: 'jwk' });
     const server = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({
-        keys: [{ ...publicJwk, kid: 'market-data-test-key', alg: 'RS256', use: 'sig' }],
-      }));
+      response.end(
+        JSON.stringify({
+          keys: [{ ...publicJwk, kid: 'market-data-test-key', alg: 'RS256', use: 'sig' }],
+        }),
+      );
     });
     jwksServer = server;
     await new Promise<void>((resolve, reject) => {

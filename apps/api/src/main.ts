@@ -45,10 +45,8 @@ export async function startApi(env: ConfigEnv): Promise<void> {
         pool
           ? {
               instrumentRepository: new PgInstrumentRepository(pool),
-              candleRepository: new PgMarketDataRepository(
-                pool,
-                sourceValidator,
-                () => systemClock.now(),
+              candleRepository: new PgMarketDataRepository(pool, sourceValidator, () =>
+                systemClock.now(),
               ),
               sourceValidator,
               clock: systemClock,

@@ -13,40 +13,66 @@ const now = new Date('2026-10-30T04:00:00.000Z');
 const c1: MarketDataCandle = {
   openTime: new Date('2026-10-30T01:00:00.000Z'),
   closeTime: new Date('2026-10-30T01:59:59.999Z'),
-  open: 100, high: 102, low: 99, close: 101, volume: 10,
+  open: 100,
+  high: 102,
+  low: 99,
+  close: 101,
+  volume: 10,
 };
 const c2: MarketDataCandle = {
   openTime: new Date('2026-10-30T02:00:00.000Z'),
   closeTime: new Date('2026-10-30T02:59:59.999Z'),
-  open: 101, high: 103, low: 100, close: 102, volume: 12,
+  open: 101,
+  high: 103,
+  low: 100,
+  close: 102,
+  volume: 12,
 };
 const c3: MarketDataCandle = {
   openTime: new Date('2026-10-30T03:00:00.000Z'),
   closeTime: new Date('2026-10-30T03:59:59.999Z'),
-  open: 102, high: 104, low: 101, close: 103, volume: 15,
+  open: 102,
+  high: 104,
+  low: 101,
+  close: 103,
+  volume: 15,
 };
 const c4: MarketDataCandle = {
   openTime: new Date('2026-10-30T04:00:00.000Z'),
   closeTime: new Date('2026-10-30T04:59:59.999Z'),
-  open: 102, high: 105, low: 101, close: 104, volume: 16,
+  open: 102,
+  high: 105,
+  low: 101,
+  close: 104,
+  volume: 16,
 };
 
-function memoryRepository(): CandleRepository & { readonly records: Map<string, StoredMarketCandle> } {
+function memoryRepository(): CandleRepository & {
+  readonly records: Map<string, StoredMarketCandle>;
+} {
   const records = new Map<string, StoredMarketCandle>();
   return {
     records,
     async persistClosedCandles(input) {
       for (const candle of input.candles) {
         const key = `${input.symbol}:${input.timeframe}:${candle.openTime.toISOString()}`;
-        records.set(key, { ...candle, symbol: input.symbol, timeframe: input.timeframe, provider: input.provider });
+        records.set(key, {
+          ...candle,
+          symbol: input.symbol,
+          timeframe: input.timeframe,
+          provider: input.provider,
+        });
       }
       return input.candles.length;
     },
     async queryClosedCandles(input) {
       return [...records.values()]
-        .filter((candle) => candle.symbol === input.symbol &&
-          candle.provider === input.provider &&
-          candle.timeframe === input.timeframe)
+        .filter(
+          (candle) =>
+            candle.symbol === input.symbol &&
+            candle.provider === input.provider &&
+            candle.timeframe === input.timeframe,
+        )
         .sort((left, right) => left.openTime.getTime() - right.openTime.getTime())
         .slice(-(input.limit ?? 500));
     },
@@ -68,7 +94,8 @@ describe('runMarketDataIngestion', () => {
     const clock: Clock = { now: () => new Date(now) };
     const sourceValidator: MarketDataSourceValidator = {
       assertValidated: (providerId, symbol) => {
-        if (providerId !== 'binance-spot' || symbol !== 'BTCUSDT') throw new Error('source not validated');
+        if (providerId !== 'binance-spot' || symbol !== 'BTCUSDT')
+          throw new Error('source not validated');
       },
     };
     const dependencies = { clock, provider, repository, sourceValidator };
@@ -92,7 +119,6 @@ describe('runMarketDataIngestion', () => {
     expect(getHistory).toHaveBeenCalledTimes(1);
     expect(getCandles).toHaveBeenCalledTimes(2);
   });
-
 
   it('catches up every closed candle missed while the worker was offline', async () => {
     const repository = memoryRepository();
@@ -154,15 +180,17 @@ describe('runMarketDataIngestion', () => {
     };
     const sourceValidator: MarketDataSourceValidator = { assertValidated: () => undefined };
 
-    await expect(runMarketDataIngestion(
-      { timeframes: ['1h'], historyCandles: { '1h': 2 } },
-      {
-        clock: { now: () => new Date('2026-10-30T05:00:00.000Z') },
-        provider,
-        repository,
-        sourceValidator,
-      },
-    )).rejects.toThrow('Market-data gap detected');
+    await expect(
+      runMarketDataIngestion(
+        { timeframes: ['1h'], historyCandles: { '1h': 2 } },
+        {
+          clock: { now: () => new Date('2026-10-30T05:00:00.000Z') },
+          provider,
+          repository,
+          sourceValidator,
+        },
+      ),
+    ).rejects.toThrow('Market-data gap detected');
     expect(repository.records.size).toBe(1);
   });
 
@@ -174,12 +202,21 @@ describe('runMarketDataIngestion', () => {
       getCandles: async () => [],
     };
     const sourceValidator: MarketDataSourceValidator = {
-      assertValidated: () => { throw new Error('Market-data source is not validated'); },
+      assertValidated: () => {
+        throw new Error('Market-data source is not validated');
+      },
     };
-    await expect(runMarketDataIngestion(
-      { timeframes: ['1h'], historyCandles: { '1h': 2 } },
-      { clock: { now: () => new Date(now) }, provider, repository: memoryRepository(), sourceValidator },
-    )).rejects.toThrow('Market-data source is not validated');
+    await expect(
+      runMarketDataIngestion(
+        { timeframes: ['1h'], historyCandles: { '1h': 2 } },
+        {
+          clock: { now: () => new Date(now) },
+          provider,
+          repository: memoryRepository(),
+          sourceValidator,
+        },
+      ),
+    ).rejects.toThrow('Market-data source is not validated');
     expect(getHistory).not.toHaveBeenCalled();
   });
 
@@ -191,10 +228,12 @@ describe('runMarketDataIngestion', () => {
       getCandles: async () => [c2],
     };
     const sourceValidator: MarketDataSourceValidator = { assertValidated: () => undefined };
-    await expect(runMarketDataIngestion(
-      { timeframes: ['1h'], historyCandles: { '1h': 2 } },
-      { clock: { now: () => new Date(now) }, provider, repository, sourceValidator },
-    )).rejects.toThrow('Incomplete 1h backfill');
+    await expect(
+      runMarketDataIngestion(
+        { timeframes: ['1h'], historyCandles: { '1h': 2 } },
+        { clock: { now: () => new Date(now) }, provider, repository, sourceValidator },
+      ),
+    ).rejects.toThrow('Incomplete 1h backfill');
     expect(repository.records.size).toBe(0);
   });
 
@@ -205,14 +244,17 @@ describe('runMarketDataIngestion', () => {
       getCandles: async () => [],
     };
     const sourceValidator: MarketDataSourceValidator = { assertValidated: () => undefined };
-    const dependencies = { clock: { now: () => new Date(now) }, provider, repository: memoryRepository(), sourceValidator };
-    await expect(runMarketDataIngestion(
-      { timeframes: ['1h'], historyCandles: { '1h': 1 } },
-      dependencies,
-    )).rejects.toThrow('historyCandles for 1h');
-    await expect(runMarketDataIngestion(
-      { timeframes: [] },
-      dependencies,
-    )).rejects.toThrow('At least one timeframe');
+    const dependencies = {
+      clock: { now: () => new Date(now) },
+      provider,
+      repository: memoryRepository(),
+      sourceValidator,
+    };
+    await expect(
+      runMarketDataIngestion({ timeframes: ['1h'], historyCandles: { '1h': 1 } }, dependencies),
+    ).rejects.toThrow('historyCandles for 1h');
+    await expect(runMarketDataIngestion({ timeframes: [] }, dependencies)).rejects.toThrow(
+      'At least one timeframe',
+    );
   });
 });

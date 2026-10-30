@@ -26,15 +26,20 @@ function positiveInteger(value: string, name: string): number {
 
 export function parseIngestArguments(args: readonly string[]): MarketDataIngestionOptions {
   if (args[0] !== 'ingest') {
-    throw new Error('Usage: year95-worker ingest [--symbol BTCUSDT] [--timeframe 1h|4h|1d] [--candles N]');
+    throw new Error(
+      'Usage: year95-worker ingest [--symbol BTCUSDT] [--timeframe 1h|4h|1d] [--candles N]',
+    );
   }
 
   const symbol = readOption(args, '--symbol') ?? 'BTCUSDT';
   const timeframeValue = readOption(args, '--timeframe');
-  const timeframes = timeframeValue === undefined
-    ? INGESTION_TIMEFRAMES
-    : [timeframeValue as (typeof INGESTION_TIMEFRAMES)[number]];
-  if (timeframes.some((timeframe) => !(INGESTION_TIMEFRAMES as readonly string[]).includes(timeframe))) {
+  const timeframes =
+    timeframeValue === undefined
+      ? INGESTION_TIMEFRAMES
+      : [timeframeValue as (typeof INGESTION_TIMEFRAMES)[number]];
+  if (
+    timeframes.some((timeframe) => !(INGESTION_TIMEFRAMES as readonly string[]).includes(timeframe))
+  ) {
     throw new Error('timeframe must be 1h, 4h or 1d');
   }
 
@@ -43,7 +48,8 @@ export function parseIngestArguments(args: readonly string[]): MarketDataIngesti
   for (const timeframe of timeframes) {
     const specific = readOption(args, `--candles-${timeframe}`);
     const count = specific ?? commonCount;
-    if (count !== undefined) overrides[timeframe] = positiveInteger(count, `--candles${specific ? `-${timeframe}` : ''}`);
+    if (count !== undefined)
+      overrides[timeframe] = positiveInteger(count, `--candles${specific ? `-${timeframe}` : ''}`);
   }
   return {
     symbol,
@@ -82,7 +88,9 @@ export async function runWorkerCommand(args: readonly string[], env: ConfigEnv):
 const invokedPath = process.argv[1];
 if (invokedPath !== undefined && resolve(invokedPath) === fileURLToPath(import.meta.url)) {
   void runWorkerCommand(process.argv.slice(2), { ...process.env }).catch(() => {
-    process.stderr.write('YEAR95 worker ingestion failed. Check runtime configuration and market-data provider health.\n');
+    process.stderr.write(
+      'YEAR95 worker ingestion failed. Check runtime configuration and market-data provider health.\n',
+    );
     process.exitCode = 1;
   });
 }

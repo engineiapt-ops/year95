@@ -7,12 +7,18 @@ import type {
 import { normalizeCandles } from '@year95/market-data';
 import type { MarketDataSourceValidator } from '@year95/market-data';
 
-export const INGESTION_TIMEFRAMES = ['1h', '4h', '1d'] as const satisfies readonly MarketDataTimeframe[];
-export const DEFAULT_HISTORY_CANDLES: Readonly<Record<MarketDataTimeframe, number>> = Object.freeze({
-  '1h': 5_000,
-  '4h': 5_000,
-  '1d': 3_000,
-});
+export const INGESTION_TIMEFRAMES = [
+  '1h',
+  '4h',
+  '1d',
+] as const satisfies readonly MarketDataTimeframe[];
+export const DEFAULT_HISTORY_CANDLES: Readonly<Record<MarketDataTimeframe, number>> = Object.freeze(
+  {
+    '1h': 5_000,
+    '4h': 5_000,
+    '1d': 3_000,
+  },
+);
 
 const HISTORY_CHUNK_SIZE = 1_000;
 const HISTORY_DELAY_MS = 150;
@@ -63,9 +69,7 @@ function normalizeSymbol(symbol: string): string {
   return normalized;
 }
 
-function normalizeTimeframes(
-  timeframes: readonly MarketDataTimeframe[],
-): MarketDataTimeframe[] {
+function normalizeTimeframes(timeframes: readonly MarketDataTimeframe[]): MarketDataTimeframe[] {
   const selected = [...new Set(timeframes)];
   if (selected.length === 0) throw new Error('At least one timeframe is required');
   for (const timeframe of selected) {
@@ -161,8 +165,8 @@ export async function runMarketDataIngestion(
             maxCandles: HISTORY_CHUNK_SIZE + 1,
           })
         : normalizeCandles([checkpoint], now, timeframe, {
-          maxCandles: HISTORY_CHUNK_SIZE + 1,
-        })
+            maxCandles: HISTORY_CHUNK_SIZE + 1,
+          })
       : normalizeCandles([...normalizedHistory, ...incremental], now, timeframe, {
           maxCandles: requestedHistoryCandles + INITIAL_INCREMENTAL_CANDLE_LIMIT,
         });
@@ -183,7 +187,9 @@ export async function runMarketDataIngestion(
       requestedHistoryCandles,
       backfillPerformed,
       historyCandles: normalizedHistory.length,
-      incrementalCandles: checkpoint ? newCandles.length : Math.max(0, combined.length - normalizedHistory.length),
+      incrementalCandles: checkpoint
+        ? newCandles.length
+        : Math.max(0, combined.length - normalizedHistory.length),
       persistedCandles,
       dataAsOf: latest.closeTime.toISOString(),
     });

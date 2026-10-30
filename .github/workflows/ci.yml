@@ -220,7 +220,6 @@ jobs:
           DB_BASELINE_DISPOSABLE: '1'
         run: pnpm db:baseline
 
-
   e2e:
     name: e2e
     needs: install

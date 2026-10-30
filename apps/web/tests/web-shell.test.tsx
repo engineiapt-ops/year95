@@ -35,16 +35,18 @@ function makeApiClient(overrides: Partial<DashboardApi> = {}): DashboardApi {
       email: 'trader@example.test',
     }),
     getInstruments: vi.fn().mockResolvedValue({
-      items: [{
-        symbol: 'BTCUSDT',
-        displayName: 'Bitcoin / Tether',
-        assetType: 'crypto_spot',
-        venue: 'binance_spot',
-        baseCurrency: 'BTC',
-        quoteCurrency: 'USDT',
-        providerId: 'binance-spot',
-        timeframes: ['1h', '4h', '1d'],
-      }],
+      items: [
+        {
+          symbol: 'BTCUSDT',
+          displayName: 'Bitcoin / Tether',
+          assetType: 'crypto_spot',
+          venue: 'binance_spot',
+          baseCurrency: 'BTC',
+          quoteCurrency: 'USDT',
+          providerId: 'binance-spot',
+          timeframes: ['1h', '4h', '1d'],
+        },
+      ],
     }),
     getMarketCandles: vi.fn().mockResolvedValue({
       symbol: 'BTCUSDT',
@@ -52,8 +54,24 @@ function makeApiClient(overrides: Partial<DashboardApi> = {}): DashboardApi {
       providerId: 'binance-spot',
       dataAsOf: '2026-10-30T02:59:59.999Z',
       candles: [
-        { openTime: '2026-10-30T01:00:00.000Z', closeTime: '2026-10-30T01:59:59.999Z', open: 100, high: 102, low: 99, close: 101, volume: 10 },
-        { openTime: '2026-10-30T02:00:00.000Z', closeTime: '2026-10-30T02:59:59.999Z', open: 101, high: 103, low: 100, close: 102, volume: 12 },
+        {
+          openTime: '2026-10-30T01:00:00.000Z',
+          closeTime: '2026-10-30T01:59:59.999Z',
+          open: 100,
+          high: 102,
+          low: 99,
+          close: 101,
+          volume: 10,
+        },
+        {
+          openTime: '2026-10-30T02:00:00.000Z',
+          closeTime: '2026-10-30T02:59:59.999Z',
+          open: 101,
+          high: 103,
+          low: 100,
+          close: 102,
+          volume: 12,
+        },
       ],
     }),
     getMarketQuality: vi.fn().mockResolvedValue({

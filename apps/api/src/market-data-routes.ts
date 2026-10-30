@@ -12,10 +12,7 @@ import {
   marketDataTimeframeSchema,
   marketInstrumentsResponseSchema,
 } from '@year95/contracts';
-import {
-  maxMarketDataAgeMs,
-  type MarketDataSourceValidator,
-} from '@year95/market-data';
+import { maxMarketDataAgeMs, type MarketDataSourceValidator } from '@year95/market-data';
 
 const CANONICAL_PROVIDER_ID = 'binance-spot';
 const SUPPORTED_SYMBOL = 'BTCUSDT';
@@ -30,16 +27,19 @@ export interface MarketDataRouteDependencies {
 }
 
 function sendRouteError(reply: FastifyReply, statusCode: 400 | 404 | 503, message: string) {
-  const code = statusCode === 400 ? 'BAD_REQUEST' : statusCode === 404 ? 'NOT_FOUND' : 'SERVICE_UNAVAILABLE';
+  const code =
+    statusCode === 400 ? 'BAD_REQUEST' : statusCode === 404 ? 'NOT_FOUND' : 'SERVICE_UNAVAILABLE';
   return reply.code(statusCode).send({ error: { code, message } });
 }
 
 function isApprovedInstrument(instrument: Instrument): boolean {
-  return instrument.enabled &&
+  return (
+    instrument.enabled &&
     instrument.symbol.toUpperCase() === SUPPORTED_SYMBOL &&
     instrument.assetType === 'crypto_spot' &&
     instrument.venue === 'binance_spot' &&
-    instrument.metadataStatus === 'verified';
+    instrument.metadataStatus === 'verified'
+  );
 }
 
 function parseTimeframe(value: unknown): MarketDataTimeframe | undefined {
@@ -72,7 +72,8 @@ export function registerMarketDataRoutes(
   dependencies?: MarketDataRouteDependencies,
 ): void {
   v1.get('/instruments', async (_request, reply) => {
-    if (!dependencies) return sendRouteError(reply, 503, 'Market-data repositories are unavailable');
+    if (!dependencies)
+      return sendRouteError(reply, 503, 'Market-data repositories are unavailable');
 
     const instruments = await dependencies.instrumentRepository.listEnabled();
     const approved = instruments.filter((instrument) => {
@@ -99,16 +100,23 @@ export function registerMarketDataRoutes(
   });
 
   v1.get('/market/:symbol/candles', async (request, reply) => {
-    if (!dependencies) return sendRouteError(reply, 503, 'Market-data repositories are unavailable');
+    if (!dependencies)
+      return sendRouteError(reply, 503, 'Market-data repositories are unavailable');
     const params = request.params as { readonly symbol?: unknown };
     const query = request.query as { readonly tf?: unknown; readonly limit?: unknown };
     const timeframe = parseTimeframe(query.tf);
     if (!timeframe) return sendRouteError(reply, 400, 'tf must be 1h, 4h or 1d');
     const limit = parseLimit(query.limit);
-    if (limit === undefined) return sendRouteError(reply, 400, `limit must be an integer between 1 and ${MAX_CANDLE_LIMIT}`);
+    if (limit === undefined)
+      return sendRouteError(
+        reply,
+        400,
+        `limit must be an integer between 1 and ${MAX_CANDLE_LIMIT}`,
+      );
 
     const instrument = await findApprovedInstrument(params.symbol, dependencies);
-    if (!instrument) return sendRouteError(reply, 404, 'Instrument is not enabled for validated market data');
+    if (!instrument)
+      return sendRouteError(reply, 404, 'Instrument is not enabled for validated market data');
 
     const candles = await dependencies.candleRepository.queryClosedCandles({
       symbol: instrument.symbol,
@@ -135,14 +143,16 @@ export function registerMarketDataRoutes(
   });
 
   v1.get('/market/:symbol/quality', async (request, reply) => {
-    if (!dependencies) return sendRouteError(reply, 503, 'Market-data repositories are unavailable');
+    if (!dependencies)
+      return sendRouteError(reply, 503, 'Market-data repositories are unavailable');
     const params = request.params as { readonly symbol?: unknown };
     const query = request.query as { readonly tf?: unknown };
     const timeframe = parseTimeframe(query.tf);
     if (!timeframe) return sendRouteError(reply, 400, 'tf must be 1h, 4h or 1d');
 
     const instrument = await findApprovedInstrument(params.symbol, dependencies);
-    if (!instrument) return sendRouteError(reply, 404, 'Instrument is not enabled for validated market data');
+    if (!instrument)
+      return sendRouteError(reply, 404, 'Instrument is not enabled for validated market data');
 
     const checkedAt = dependencies.clock.now();
     const checkedAtMs = checkedAt.getTime();

@@ -30,11 +30,11 @@ A execução usa um `Clock` injetado, paginação histórica de até 1.000 candl
 
 As três rotas abaixo ficam sob o prefixo `/v1` e usam o mesmo JWT + allowlist do restante da API:
 
-| Método e rota | Descrição |
-| --- | --- |
-| `GET /v1/instruments` | Lista instrumentos habilitados com mapeamento de market data validado. |
-| `GET /v1/market/:symbol/candles?tf=1h&limit=300` | Lê candles fechados por timeframe; `limit` entre 1 e 1.000. |
-| `GET /v1/market/:symbol/quality?tf=1h` | Retorna `fresh`, `stale` ou `no_data`, com bloqueio explícito. |
+| Método e rota                                    | Descrição                                                              |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `GET /v1/instruments`                            | Lista instrumentos habilitados com mapeamento de market data validado. |
+| `GET /v1/market/:symbol/candles?tf=1h&limit=300` | Lê candles fechados por timeframe; `limit` entre 1 e 1.000.            |
+| `GET /v1/market/:symbol/quality?tf=1h`           | Retorna `fresh`, `stale` ou `no_data`, com bloqueio explícito.         |
 
 O limite de frescor é 1,5× a duração do timeframe, mantendo a regra de qualidade aprovada no contrato de market data. `stale` e `no_data` são respostas de qualidade válidas, mas ambas têm `blocked: true`. Uma vela futura ou um relógio inválido resulta em falha de serviço; não é convertida em dado fresco.
 
