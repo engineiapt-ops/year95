@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       expected_pending:
-        description: 'Expected pending migration numbers, comma-separated (for example 027,028,029).'
+        description: 'Expected pending migration numbers, comma-separated (for the current production rollout: 030).'
         required: true
         type: string
 
@@ -238,17 +238,29 @@ jobs:
             exit 1
           fi
           IFS='|' read -r constraint_type constraint_definition constraint_validated <<< "$constraint_row"
-          expected_constraint="CHECK (estrategia = ANY (ARRAY['baseline'::text, 'buyhold'::text, 'jev'::text]))"
+          expected_constraint="CHECK (estrategia = ANY (ARRAY['baseline'::text, 'baseline_risk'::text, 'buyhold'::text, 'jev'::text]))"
           if [[ "$constraint_type" != "c" || "$constraint_validated" != "true" || "$constraint_definition" != "$expected_constraint" ]]; then
             echo "::error::The current benchmark strategy CHECK does not match the reviewed precondition; refusing to continue."
             printf 'Observed constraint type=%s validated=%s definition=%s\n' "$constraint_type" "$constraint_validated" "$constraint_definition"
             exit 1
           fi
-          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
-          IFS=$'\t' read -r pre_benchmark_rows pre_backtest_rows pre_wf_rows <<< "$counts"
+          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds), (SELECT COUNT(*)::bigint FROM public.market_data)")"
+          IFS=$'\t' read -r pre_benchmark_rows pre_backtest_rows pre_wf_rows pre_market_data_rows <<< "$counts"
 
           identity_tables="$(readonly_query "SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL")"
           IFS=$'\t' read -r allowed_emails_exists user_profiles_exists <<< "$identity_tables"
+          if [[ "$allowed_emails_exists" != "t" || "$user_profiles_exists" != "t" ]]; then
+            echo "::error::Expected production identity tables public.allowed_emails and public.user_profiles to exist. No changes made."
+            exit 1
+          fi
+          identity_counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.allowed_emails), (SELECT COUNT(*)::bigint FROM public.user_profiles)")"
+          IFS=$'\t' read -r pre_allowed_emails_rows pre_user_profiles_rows <<< "$identity_counts"
+
+          market_data_pending_columns="$(readonly_query "SELECT COUNT(*)::bigint FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'market_data' AND column_name IN ('close_time', 'data_provider')")"
+          if [[ "$market_data_pending_columns" != "0" ]]; then
+            echo "::error::Migration 030 expects close_time and data_provider to be absent before application. No changes made."
+            exit 1
+          fi
 
           long_transactions="$(readonly_query "SELECT COUNT(*)::bigint FROM pg_stat_activity WHERE datname = current_database() AND pid IS DISTINCT FROM pg_backend_pid() AND xact_start IS NOT NULL AND xact_start < now() - interval '1 minute'")"
           auth_users_locks="$(readonly_query "SELECT COUNT(*)::bigint FROM pg_locks l JOIN pg_class c ON c.oid = l.relation JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'auth' AND c.relname = 'users' AND l.pid IS DISTINCT FROM pg_backend_pid()")"
@@ -262,8 +274,8 @@ jobs:
             echo "- Expected pending: \`$EXPECTED_PENDING\`"
             echo "- Actual pending: \`$actual_pending\`"
             echo "- Constraint before: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
-            echo "- Row counts before: \`benchmark_results=$pre_benchmark_rows\`, \`backtest_runs=$pre_backtest_rows\`, \`walk_forward_folds=$pre_wf_rows\`"
-            echo "- Identity tables absent before: \`allowed_emails=$allowed_emails_exists\`, \`user_profiles=$user_profiles_exists\`"
+            echo "- Row counts before: \`benchmark_results=$pre_benchmark_rows\`, \`backtest_runs=$pre_backtest_rows\`, \`walk_forward_folds=$pre_wf_rows\`, \`market_data=$pre_market_data_rows\`"
+            echo "- Existing identity rows before: \`allowed_emails=$pre_allowed_emails_rows\`, \`user_profiles=$pre_user_profiles_rows\`"
             echo "- Transactions open over 1 minute: \`$long_transactions\`"
             echo "- Locks on \`auth.users\`: \`$auth_users_locks\`"
             echo
@@ -274,10 +286,6 @@ jobs:
             echo ' ```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$allowed_emails_exists" != "f" || "$user_profiles_exists" != "f" ]]; then
-            echo "::error::allowed_emails and user_profiles must not exist before migration 027. No changes made."
-            exit 1
-          fi
           if [[ "$long_transactions" != "0" ]]; then
             echo "::error::Found $long_transactions transaction(s) open longer than one minute. No changes made."
             exit 1
@@ -290,6 +298,9 @@ jobs:
           printf 'PRE_BENCHMARK_ROWS=%s\n' "$pre_benchmark_rows" >> "$GITHUB_ENV"
           printf 'PRE_BACKTEST_ROWS=%s\n' "$pre_backtest_rows" >> "$GITHUB_ENV"
           printf 'PRE_WF_ROWS=%s\n' "$pre_wf_rows" >> "$GITHUB_ENV"
+          printf 'PRE_MARKET_DATA_ROWS=%s\n' "$pre_market_data_rows" >> "$GITHUB_ENV"
+          printf 'PRE_ALLOWED_EMAILS_ROWS=%s\n' "$pre_allowed_emails_rows" >> "$GITHUB_ENV"
+          printf 'PRE_USER_PROFILES_ROWS=%s\n' "$pre_user_profiles_rows" >> "$GITHUB_ENV"
           printf 'EXPECTED_POST_MIGRATIONS=%s\n' "$(IFS=,; printf '%s' "${expected_post_names[*]}")" >> "$GITHUB_ENV"
 
       - name: Verify repository is private before creating a dump
@@ -353,7 +364,7 @@ jobs:
           fi
 
           "$PG_BIN_DIR/pg_restore" --list "$dump_file" > "$restore_list"
-          for table in benchmark_results backtest_runs walk_forward_folds; do
+          for table in benchmark_results backtest_runs walk_forward_folds market_data allowed_emails user_profiles; do
             if ! grep -Eq "^[0-9]+; [0-9]+ [0-9]+ TABLE public ${table} " "$restore_list"; then
               echo "::error::Validated dump does not list TABLE public ${table}. Production migrations will not run."
               exit 1
@@ -379,7 +390,7 @@ jobs:
             echo "- SHA-256: \`$dump_sha256\`"
             echo "- File non-empty: PASS"
             echo "- \`pg_restore --list\`: PASS"
-            echo "- Required table and table-data entries (\`benchmark_results\`, \`backtest_runs\`, \`walk_forward_folds\`): PASS"
+            echo "- Required table and table-data entries (\`benchmark_results\`, \`backtest_runs\`, \`walk_forward_folds\`, \`market_data\`, \`allowed_emails\`, \`user_profiles\`): PASS"
             echo "- Artifact retention: 7 days; repository privacy was verified before dump creation."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -529,8 +540,8 @@ jobs:
               post_errors+=("benchmark_results_estrategia_check is not a validated CHECK allowing all four expected strategy values: $constraint_definition")
             fi
           fi
-          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds)")"
-          IFS=$'\t' read -r post_benchmark_rows post_backtest_rows post_wf_rows <<< "$counts"
+          counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.benchmark_results), (SELECT COUNT(*)::bigint FROM public.backtest_runs), (SELECT COUNT(*)::bigint FROM public.walk_forward_folds), (SELECT COUNT(*)::bigint FROM public.market_data)")"
+          IFS=$'\t' read -r post_benchmark_rows post_backtest_rows post_wf_rows post_market_data_rows <<< "$counts"
           if [[ "$post_benchmark_rows" != "$PRE_BENCHMARK_ROWS" ]]; then
             post_errors+=("benchmark_results row count changed: before=$PRE_BENCHMARK_ROWS after=$post_benchmark_rows")
           fi
@@ -540,19 +551,30 @@ jobs:
           if [[ "$post_wf_rows" != "$PRE_WF_ROWS" ]]; then
             post_errors+=("walk_forward_folds row count changed: before=$PRE_WF_ROWS after=$post_wf_rows")
           fi
+          if [[ "$post_market_data_rows" != "$PRE_MARKET_DATA_ROWS" ]]; then
+            post_errors+=("market_data row count changed: before=$PRE_MARKET_DATA_ROWS after=$post_market_data_rows")
+          fi
 
           identity_exists="$(readonly_query "SELECT to_regclass('public.allowed_emails') IS NOT NULL, to_regclass('public.user_profiles') IS NOT NULL")"
           IFS=$'\t' read -r allowed_emails_exists user_profiles_exists <<< "$identity_exists"
           if [[ "$allowed_emails_exists" != "t" || "$user_profiles_exists" != "t" ]]; then
-            post_errors+=("Expected new identity tables are missing: allowed_emails=$allowed_emails_exists user_profiles=$user_profiles_exists")
+            post_errors+=("Production identity tables are missing: allowed_emails=$allowed_emails_exists user_profiles=$user_profiles_exists")
             allowed_emails_rows="not checked"
             user_profiles_rows="not checked"
           else
             identity_counts="$(readonly_query "SELECT (SELECT COUNT(*)::bigint FROM public.allowed_emails), (SELECT COUNT(*)::bigint FROM public.user_profiles)")"
             IFS=$'\t' read -r allowed_emails_rows user_profiles_rows <<< "$identity_counts"
-            if [[ "$allowed_emails_rows" != "0" || "$user_profiles_rows" != "0" ]]; then
-              post_errors+=("New identity tables should be empty: allowed_emails=$allowed_emails_rows user_profiles=$user_profiles_rows")
+            if [[ "$allowed_emails_rows" != "$PRE_ALLOWED_EMAILS_ROWS" ]]; then
+              post_errors+=("allowed_emails row count changed: before=$PRE_ALLOWED_EMAILS_ROWS after=$allowed_emails_rows")
             fi
+            if [[ "$user_profiles_rows" != "$PRE_USER_PROFILES_ROWS" ]]; then
+              post_errors+=("user_profiles row count changed: before=$PRE_USER_PROFILES_ROWS after=$user_profiles_rows")
+            fi
+          fi
+
+          market_data_columns="$(readonly_query "SELECT COUNT(*)::bigint FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'market_data' AND ((column_name = 'close_time' AND data_type = 'timestamp with time zone' AND is_nullable = 'YES') OR (column_name = 'data_provider' AND data_type = 'text' AND is_nullable = 'YES'))")"
+          if [[ "$market_data_columns" != "2" ]]; then
+            post_errors+=("market_data.close_time/data_provider are missing or have unexpected types/nullability (validated columns=$market_data_columns)")
           fi
 
           {
@@ -563,8 +585,8 @@ jobs:
             echo "- Dump artifact size: \`$DUMP_BYTES bytes\`"
             echo "- Dump SHA-256: \`$DUMP_SHA256\`"
             echo "- Constraint after: \`$constraint_definition\` (type=$constraint_type, validated=$constraint_validated)"
-            echo "- Row counts after: \`benchmark_results=$post_benchmark_rows\`, \`backtest_runs=$post_backtest_rows\`, \`walk_forward_folds=$post_wf_rows\`"
-            echo "- New tables: \`allowed_emails=$allowed_emails_rows rows\`, \`user_profiles=$user_profiles_rows rows\`"
+            echo "- Row counts after: \`benchmark_results=$post_benchmark_rows\`, \`backtest_runs=$post_backtest_rows\`, \`walk_forward_folds=$post_wf_rows\`, \`market_data=$post_market_data_rows\`"
+            echo "- Preserved identity rows after: \`allowed_emails=$allowed_emails_rows\`, \`user_profiles=$user_profiles_rows\`"
             echo
             echo "### Current ledger after migration (name | checksum | origin)"
             echo
