@@ -6,7 +6,6 @@ import { MarketDataSourceRegistry } from '@year95/market-data';
 import { createPgPool, PgMarketDataRepository } from '@year95/persistence';
 import { BinancePriceProvider } from '@year95/providers';
 import {
-  DEFAULT_HISTORY_CANDLES,
   INGESTION_TIMEFRAMES,
   runMarketDataIngestion,
   type MarketDataIngestionOptions,
