@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { exportJWK, generateKeyPair, SignJWT, type Session } from 'jose';
+import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import type {
   CandleRepository,
   Instrument,
@@ -187,7 +187,7 @@ describe('market-data ingestion -> API -> authenticated dashboard', () => {
       onUnauthorized: async () => undefined,
       fetchImpl,
     });
-    const session = { ...createMockSession(), access_token: token } as Session;
+    const session = { ...createMockSession(), access_token: token };
     const authClient = createMockAuthClient(session);
 
     const firstRender = render(<App authClient={authClient} apiClient={apiClient} />);
