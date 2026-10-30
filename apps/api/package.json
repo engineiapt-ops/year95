@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json --noEmit",
-    "build": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json"
+    "build": "pnpm --filter @year95/config build && pnpm --filter @year95/contracts build && pnpm --filter @year95/market-data build && pnpm --filter @year95/persistence build && tsc -p tsconfig.json",
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@year95/config": "workspace:*",
