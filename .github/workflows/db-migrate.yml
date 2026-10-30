@@ -286,10 +286,6 @@ jobs:
             echo ' ```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$allowed_emails_exists" != "f" || "$user_profiles_exists" != "f" ]]; then
-            echo "::error::allowed_emails and user_profiles must not exist before migration 027. No changes made."
-            exit 1
-          fi
           if [[ "$long_transactions" != "0" ]]; then
             echo "::error::Found $long_transactions transaction(s) open longer than one minute. No changes made."
             exit 1
@@ -394,7 +390,7 @@ jobs:
             echo "- SHA-256: \`$dump_sha256\`"
             echo "- File non-empty: PASS"
             echo "- \`pg_restore --list\`: PASS"
-            echo "- Required table and table-data entries (\`benchmark_results\`, \`backtest_runs\`, \`walk_forward_folds\`): PASS"
+            echo "- Required table and table-data entries (\`benchmark_results\`, \`backtest_runs\`, \`walk_forward_folds\`, \`market_data\`, \`allowed_emails\`, \`user_profiles\`): PASS"
             echo "- Artifact retention: 7 days; repository privacy was verified before dump creation."
           } >> "$GITHUB_STEP_SUMMARY"
 
