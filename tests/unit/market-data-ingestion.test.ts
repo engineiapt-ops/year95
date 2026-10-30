@@ -70,6 +70,7 @@ describe('runMarketDataIngestion', () => {
     const first = await runMarketDataIngestion(options, dependencies);
     expect(first.timeframes[0]).toMatchObject({
       timeframe: '1h',
+      backfillPerformed: true,
       requestedHistoryCandles: 2,
       historyCandles: 2,
       incrementalCandles: 1,
@@ -79,9 +80,9 @@ describe('runMarketDataIngestion', () => {
     expect(repository.records.size).toBe(3);
 
     const second = await runMarketDataIngestion(options, dependencies);
-    expect(second.timeframes[0]?.persistedCandles).toBe(3);
+    expect(second.timeframes[0]).toMatchObject({ backfillPerformed: false, persistedCandles: 0 });
     expect(repository.records.size).toBe(3);
-    expect(getHistory).toHaveBeenCalledTimes(2);
+    expect(getHistory).toHaveBeenCalledTimes(1);
     expect(getCandles).toHaveBeenCalledTimes(2);
   });
 
