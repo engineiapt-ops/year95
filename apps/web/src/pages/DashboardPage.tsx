@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
+import { MarketDataSection } from '../components/MarketDataSection.js';
 import { StatusCard, type StatusTone } from '../components/StatusCard.js';
-import { WebApiClient, type ApiClientOptions } from '../lib/apiClient.js';
+import { WebApiClient, type ApiClientOptions, type MarketDataApi } from '../lib/apiClient.js';
 import { getApiBaseUrl } from '../lib/webConfig.js';
 
-export interface DashboardApi {
+export interface DashboardApi extends MarketDataApi {
   getHealth(): ReturnType<WebApiClient['getHealth']>;
   getReadiness(): ReturnType<WebApiClient['getReadiness']>;
   getMe(): ReturnType<WebApiClient['getMe']>;
@@ -145,6 +146,7 @@ export function DashboardPage({ apiClient, apiClientOptions }: DashboardPageProp
           {...(identityDetail ? { detail: identityDetail } : {})}
         />
       </div>
+      <MarketDataSection api={client} />
       <p className="dashboard-note">
         A API valida o JWT e a allowlist no backend. Este painel não envia ordens nem executa
         operações financeiras reais.
