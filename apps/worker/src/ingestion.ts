@@ -29,6 +29,7 @@ export interface MarketDataIngestionDependencies {
 export interface IngestTimeframeResult {
   readonly timeframe: MarketDataTimeframe;
   readonly requestedHistoryCandles: number;
+  readonly backfillPerformed: boolean;
   readonly historyCandles: number;
   readonly incrementalCandles: number;
   readonly persistedCandles: number;
@@ -82,8 +83,9 @@ function historyCount(
 }
 
 /**
- * Backfill plus incremental collection. The clock is read once so every timeframe
- * in one ingestion cycle uses the same market-data cutoff.
+ * On an empty timeframe, fetches and persists the historical backfill before
+ * adding the two latest closed candles. Later runs use the last stored candle
+ * as a checkpoint and persist only newer candles, avoiding full-history rewrites.
  */
 export async function runMarketDataIngestion(
   options: MarketDataIngestionOptions,
@@ -104,27 +106,39 @@ export async function runMarketDataIngestion(
 
   for (const timeframe of timeframes) {
     const requestedHistoryCandles = historyCount(timeframe, options.historyCandles);
-    const history = await dependencies.provider.getHistory({
-      instrument: symbol,
+    const stored = await dependencies.repository.queryClosedCandles({
+      symbol,
+      provider: providerId,
       timeframe,
-      totalCandles: requestedHistoryCandles,
-      endTime: nowMs,
-      chunkSize: HISTORY_CHUNK_SIZE,
-      delayMs: HISTORY_DELAY_MS,
+      limit: 1,
     });
-    if (history.length !== requestedHistoryCandles) {
-      throw new Error(
-        `Incomplete ${timeframe} backfill: requested ${requestedHistoryCandles}, received ${history.length}`,
-      );
-    }
+    const checkpoint = stored[stored.length - 1];
+    const backfillPerformed = checkpoint === undefined;
+    let normalizedHistory: ReturnType<typeof normalizeCandles> = [];
 
-    const normalizedHistory = normalizeCandles(history, now, timeframe, {
-      maxCandles: requestedHistoryCandles + INCREMENTAL_CANDLE_LIMIT,
-    });
-    if (normalizedHistory.length !== requestedHistoryCandles) {
-      throw new Error(
-        `Backfill contains non-closed or duplicate ${timeframe} candles: expected ${requestedHistoryCandles}, received ${normalizedHistory.length}`,
-      );
+    if (backfillPerformed) {
+      const history = await dependencies.provider.getHistory({
+        instrument: symbol,
+        timeframe,
+        totalCandles: requestedHistoryCandles,
+        endTime: nowMs,
+        chunkSize: HISTORY_CHUNK_SIZE,
+        delayMs: HISTORY_DELAY_MS,
+      });
+      if (history.length !== requestedHistoryCandles) {
+        throw new Error(
+          `Incomplete ${timeframe} backfill: requested ${requestedHistoryCandles}, received ${history.length}`,
+        );
+      }
+
+      normalizedHistory = normalizeCandles(history, now, timeframe, {
+        maxCandles: requestedHistoryCandles + INCREMENTAL_CANDLE_LIMIT,
+      });
+      if (normalizedHistory.length !== requestedHistoryCandles) {
+        throw new Error(
+          `Backfill contains non-closed or duplicate ${timeframe} candles: expected ${requestedHistoryCandles}, received ${normalizedHistory.length}`,
+        );
+      }
     }
 
     const incremental = await dependencies.provider.getCandles({
@@ -133,24 +147,28 @@ export async function runMarketDataIngestion(
       limit: INCREMENTAL_CANDLE_LIMIT,
       endTime: nowMs,
     });
-    const combined = normalizeCandles([...normalizedHistory, ...incremental], now, timeframe, {
-      maxCandles: requestedHistoryCandles + INCREMENTAL_CANDLE_LIMIT,
+    const seed = checkpoint ? [checkpoint] : normalizedHistory;
+    const combined = normalizeCandles([...seed, ...incremental], now, timeframe, {
+      maxCandles: requestedHistoryCandles + INCREMENTAL_CANDLE_LIMIT + 1,
     });
-    const incrementalCandles = combined.length - normalizedHistory.length;
+    const newCandles = checkpoint
+      ? combined.filter((candle) => candle.openTime.getTime() > checkpoint.openTime.getTime())
+      : combined;
     const persistedCandles = await dependencies.repository.persistClosedCandles({
       symbol,
       timeframe,
       provider: providerId,
-      candles: combined,
+      candles: newCandles,
     });
-    const latest = combined[combined.length - 1];
+    const latest = combined[combined.length - 1] ?? checkpoint;
     if (!latest) throw new Error(`No closed candles available for ${timeframe}`);
 
     results.push({
       timeframe,
       requestedHistoryCandles,
+      backfillPerformed,
       historyCandles: normalizedHistory.length,
-      incrementalCandles,
+      incrementalCandles: newCandles.length,
       persistedCandles,
       dataAsOf: latest.closeTime.toISOString(),
     });
