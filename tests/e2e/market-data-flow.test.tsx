@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import { createSign, generateKeyPairSync } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import type {
   CandleRepository,
